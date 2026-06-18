@@ -151,6 +151,7 @@ function ef_callback_ajax_create_payment() {
     $amount     = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;   
     $method     = isset($_POST['method']) ? sanitize_text_field($_POST['method']) : 'Bank Transfer';   
     $date       = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';   
+    $period     = isset($_POST['period']) ? sanitize_text_field($_POST['period']) : '';
    
     if (!$tenant_id || !$amount || !$date) {   
         wp_send_json_error(['message' => 'Operational parameters data validation failure.']);   
@@ -158,11 +159,19 @@ function ef_callback_ajax_create_payment() {
    
     $tenant_name = get_the_title($tenant_id);   
     $post_title  = $tenant_name . ' - ' . date('M Y', strtotime($date));   
+    $post_date   = date('Y-m-d H:i:s');
+
+    if ($period) {
+        $post_title = $tenant_name . ' - ' . date('M Y', strtotime($period . '-01'));
+        $post_date  = $period . '-01 00:00:00';
+    }
    
     $new_payment_id = wp_insert_post([   
         'post_title'  => $post_title,   
         'post_type'   => 'payment',    
-        'post_status' => 'publish'   
+        'post_status' => 'publish',
+        'post_date'   => $post_date,
+        'post_date_gmt' => get_gmt_from_date($post_date)
     ]);   
    
     if($new_payment_id && !is_wp_error($new_payment_id)) {   
@@ -170,6 +179,9 @@ function ef_callback_ajax_create_payment() {
         update_field('amount_paid', $amount, $new_payment_id);             
         update_field('date_of_payment', $date, $new_payment_id);   
         update_field('mode_of_payment', $method, $new_payment_id);   
+        if ($period) {
+            update_field('payment_period', $period, $new_payment_id);
+        }
    
         wp_send_json_success(['payment_id' => $new_payment_id]);   
     }   
@@ -189,6 +201,7 @@ function ef_callback_ajax_update_payment() {
     $amount     = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;   
     $method     = isset($_POST['method']) ? sanitize_text_field($_POST['method']) : 'Bank Transfer';   
     $date       = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';   
+    $period     = isset($_POST['period']) ? sanitize_text_field($_POST['period']) : '';
    
     if (!$payment_id || !$tenant_id || !$amount || !$date) {   
         wp_send_json_error(['message' => 'Operational parameters data validation failure.']);   
@@ -196,10 +209,18 @@ function ef_callback_ajax_update_payment() {
    
     $tenant_name = get_the_title($tenant_id);   
     $post_title  = $tenant_name . ' - ' . date('M Y', strtotime($date));   
+    $post_date   = get_the_date('Y-m-d H:i:s', $payment_id);
+
+    if ($period) {
+        $post_title = $tenant_name . ' - ' . date('M Y', strtotime($period . '-01'));
+        $post_date  = $period . '-01 00:00:00';
+    }
    
     $updated_payment_id = wp_update_post([ 
         'ID'          => $payment_id, 
         'post_title'  => $post_title, 
+        'post_date'   => $post_date,
+        'post_date_gmt' => get_gmt_from_date($post_date)
     ]); 
    
     if($updated_payment_id && !is_wp_error($updated_payment_id)) {   
@@ -207,6 +228,9 @@ function ef_callback_ajax_update_payment() {
         update_field('amount_paid', $amount, $payment_id);             
         update_field('date_of_payment', $date, $payment_id);   
         update_field('mode_of_payment', $method, $payment_id);   
+        if ($period) {
+            update_field('payment_period', $period, $payment_id);
+        }
    
         wp_send_json_success(['payment_id' => $payment_id]);   
     }   
@@ -216,6 +240,11 @@ function ef_callback_ajax_update_payment() {
  
 add_action('wp_ajax_ef_action_delete_payment_record', 'ef_callback_ajax_delete_payment'); 
 function ef_callback_ajax_delete_payment() { 
+    check_ajax_referer('ef_payment_nonce', 'nonce');
+    if (!current_user_can('edit_posts')) {
+        wp_send_json_error(['message' => 'Unauthorized.']);
+    }
+
     $payment_id = isset($_POST['payment_id']) ? intval($_POST['payment_id']) : 0; 
     if (!$payment_id) { 
         wp_send_json_error(['message' => 'Invalid payment ID.']); 
@@ -331,6 +360,7 @@ if ($query->have_posts()) {
         $amount     = get_field('amount_paid', $payment_id);     
         $raw_date   = get_field('date_of_payment', $payment_id);     
         $method     = get_field('mode_of_payment', $payment_id);     
+        $p_period   = get_field('payment_period', $payment_id);
    
         $amount_val   = $amount ? floatval($amount) : 0.00;     
         $method_txt   = $method ? $method : 'Bank Transfer';     
@@ -352,11 +382,11 @@ if ($query->have_posts()) {
             $timestamp   = strtotime($raw_date);     
             $date_format = date('n/j/Y', $timestamp);     
             $iso_date    = date('Y-m-d', $timestamp); 
-            $period_val  = date('Y-m', $timestamp);     
+            $period_val  = $p_period ? $p_period : date('Y-m', $timestamp);
         } else {     
             $date_format = get_the_date('n/j/Y', $payment_id);     
             $iso_date    = get_the_date('Y-m-d', $payment_id); 
-            $period_val  = get_the_date('Y-m', $payment_id);     
+            $period_val  = $p_period ? $p_period : get_the_date('Y-m', $payment_id);
         }     
    
         if ($tenant_id && $tenant_name !== 'Out of contract' && !in_array($tenant_name, $unique_tenants)) {     
