@@ -1,0 +1,687 @@
+
+add_shortcode('ef_log_payment_btn', function() {   
+    $tenants_query = new WP_Query([   
+        'post_type'      => 'ef_tenant',   
+        'post_status'    => 'publish',   
+        'posts_per_page' => -1,   
+        'orderby'        => 'title',   
+        'order'          => 'ASC'   
+    ]);   
+   
+    ob_start();   
+    ?>   
+   
+    <button class="ef-main-action-trigger-btn" onclick="efOpenLogPaymentModal()">   
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>   
+        Log payment   
+    </button>   
+   
+    <div id="efLogPaymentGlobalModal" class="ef-modal-backdrop-blur" onclick="if(event.target == this) this.style.display='none';">   
+        <div class="ef-modal-window-surface">   
+   
+            <div class="ef-modal-window-header">   
+                <h3 id="efModalTitle">Log a payment</h3>   
+                <button class="ef-modal-close-x" onclick="document.getElementById('efLogPaymentGlobalModal').style.display='none';">✕</button>   
+            </div>   
+   
+            <div class="ef-modal-input-field-group">   
+                <label>Tenant</label>   
+                <select id="ef_log_tenant" class="ef-modal-element-input">   
+                    <option value="">Select Tenant Profile...</option>   
+                    <?php    
+                    if ($tenants_query->have_posts()) {   
+                        while ($tenants_query->have_posts()) {   
+                            $tenants_query->the_post();   
+                            echo '<option value="'.get_the_ID().'">'.get_the_title().'</option>';   
+                        }   
+                        wp_reset_postdata();   
+                    }   
+                    ?>   
+                </select>   
+            </div>   
+   
+            <div class="ef-input-flex-row-2col">   
+                <div class="ef-modal-input-field-group" style="margin-bottom:0;">   
+                    <label>Amount (AED)</label>   
+                    <input type="number" id="ef_log_amount" placeholder="1200" class="ef-modal-element-input">   
+                </div>   
+                <div class="ef-modal-input-field-group" style="margin-bottom:0;">   
+                    <label>Method</label>   
+                    <select id="ef_log_method" class="ef-modal-element-input">   
+                        <option value="Bank Transfer">Bank Transfer</option>   
+                        <option value="Cash">Cash</option>   
+                        <option value="Cheque">Cheque</option>   
+                        <option value="Card Payment">Card Payment</option>   
+                    </select>   
+                </div>   
+            </div>   
+   
+            <div class="ef-input-flex-row-2col">   
+                <div class="ef-modal-input-field-group" style="margin-bottom:0;">   
+                    <label>Period (YYYY-MM)</label>   
+                    <input type="text" id="ef_log_period" value="<?php echo date('Y-m'); ?>" placeholder="e.g. 2026-05" class="ef-modal-element-input">   
+                </div>   
+                <div class="ef-modal-input-field-group" style="margin-bottom:0;">   
+                    <label>Date</label>   
+                    <input type="date" id="ef_log_date" value="<?php echo date('Y-m-d'); ?>" class="ef-modal-element-input">   
+                </div>   
+            </div>   
+   
+            <div class="ef-checkbox-custom-row">   
+                <input type="checkbox" id="ef_log_receipt_pdf" checked>   
+                <label for="ef_log_receipt_pdf">Generate PDF receipt automatically</label>   
+            </div>   
+   
+            <input type="hidden" id="ef_log_payment_id" value=""> 
+            <input type="hidden" id="ef_payment_nonce" value="<?php echo wp_create_nonce('ef_payment_nonce'); ?>">
+   
+            <div class="ef-modal-action-footer-cluster">   
+                <button class="ef-btn-modal-base ef-btn-modal-cancel" onclick="document.getElementById('efLogPaymentGlobalModal').style.display='none';">Cancel</button>   
+                <button id="efSubmitBtn" class="ef-btn-modal-base ef-btn-modal-submit" onclick="efSubmitNewPaymentRecord()">Log payment</button>   
+            </div>   
+   
+        </div>   
+    </div>   
+   
+    <script>   
+    function efOpenLogPaymentModal() { 
+        document.getElementById('efModalTitle').innerText = 'Log a payment'; 
+        document.getElementById('efSubmitBtn').innerText = 'Log payment'; 
+        document.getElementById('ef_log_payment_id').value = ''; 
+        document.getElementById('ef_log_tenant').value = ''; 
+        document.getElementById('ef_log_amount').value = ''; 
+        document.getElementById('ef_log_method').value = 'Bank Transfer'; 
+        document.getElementById('ef_log_period').value = '<?php echo date('Y-m'); ?>'; 
+        document.getElementById('ef_log_date').value = '<?php echo date('Y-m-d'); ?>'; 
+        document.getElementById('efLogPaymentGlobalModal').style.display = 'flex'; 
+    } 
+ 
+    function efSubmitNewPaymentRecord() {   
+        const payment_id = document.getElementById('ef_log_payment_id').value; 
+        const tenant = document.getElementById('ef_log_tenant').value;   
+        const amount = document.getElementById('ef_log_amount').value;   
+        const method = document.getElementById('ef_log_method').value;   
+        const date = document.getElementById('ef_log_date').value;   
+        const period = document.getElementById('ef_log_period').value;   
+   
+        if(!tenant || !amount || !date) {   
+            alert('Please select a tenant and enter the payment parameters.');   
+            return;   
+        }   
+   
+        var fd = new FormData();   
+        fd.append('action', payment_id ? 'ef_action_update_payment_record' : 'ef_action_create_payment_record');   
+        fd.append('nonce', document.getElementById('ef_payment_nonce').value);
+        if (payment_id) fd.append('payment_id', payment_id); 
+        fd.append('tenant_id', tenant);   
+        fd.append('amount', amount);   
+        fd.append('method', method);   
+        fd.append('date', date);   
+        fd.append('period', period);   
+   
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', { method: 'POST', body: fd })   
+        .then(res => res.json())   
+        .then(res => {   
+            if(res.success) {   
+                document.getElementById('efLogPaymentGlobalModal').style.display = 'none';   
+   
+                window.dispatchEvent(new CustomEvent('ef_global_tenant_updated', {    
+                    detail: { id: tenant }    
+                }));   
+   
+                window.location.reload();    
+            } else {   
+                alert('Database entry submission failure.');   
+            }   
+        }).catch(err => { alert('Database communication channel interrupted.'); });   
+    }   
+    </script>   
+    <?php   
+    return ob_get_clean();   
+});   
+   
+add_action('wp_ajax_ef_action_create_payment_record', 'ef_callback_ajax_create_payment');   
+function ef_callback_ajax_create_payment() {   
+    check_ajax_referer('ef_payment_nonce', 'nonce');
+    if (!current_user_can('edit_posts')) {
+        wp_send_json_error(['message' => 'Unauthorized.']);
+    }
+
+    $tenant_id  = isset($_POST['tenant_id']) ? intval($_POST['tenant_id']) : 0;   
+    $amount     = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;   
+    $method     = isset($_POST['method']) ? sanitize_text_field($_POST['method']) : 'Bank Transfer';   
+    $date       = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';   
+   
+    if (!$tenant_id || !$amount || !$date) {   
+        wp_send_json_error(['message' => 'Operational parameters data validation failure.']);   
+    }   
+   
+    $tenant_name = get_the_title($tenant_id);   
+    $post_title  = $tenant_name . ' - ' . date('M Y', strtotime($date));   
+   
+    $new_payment_id = wp_insert_post([   
+        'post_title'  => $post_title,   
+        'post_type'   => 'payment',    
+        'post_status' => 'publish'   
+    ]);   
+   
+    if($new_payment_id && !is_wp_error($new_payment_id)) {   
+        update_field('associated_tenant', $tenant_id, $new_payment_id);    
+        update_field('amount_paid', $amount, $new_payment_id);             
+        update_field('date_of_payment', $date, $new_payment_id);   
+        update_field('mode_of_payment', $method, $new_payment_id);   
+   
+        wp_send_json_success(['payment_id' => $new_payment_id]);   
+    }   
+   
+    wp_send_json_error();   
+}   
+ 
+add_action('wp_ajax_ef_action_update_payment_record', 'ef_callback_ajax_update_payment'); 
+function ef_callback_ajax_update_payment() { 
+    check_ajax_referer('ef_payment_nonce', 'nonce');
+    if (!current_user_can('edit_posts')) {
+        wp_send_json_error(['message' => 'Unauthorized.']);
+    }
+
+    $payment_id = isset($_POST['payment_id']) ? intval($_POST['payment_id']) : 0; 
+    $tenant_id  = isset($_POST['tenant_id']) ? intval($_POST['tenant_id']) : 0;   
+    $amount     = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;   
+    $method     = isset($_POST['method']) ? sanitize_text_field($_POST['method']) : 'Bank Transfer';   
+    $date       = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';   
+   
+    if (!$payment_id || !$tenant_id || !$amount || !$date) {   
+        wp_send_json_error(['message' => 'Operational parameters data validation failure.']);   
+    }   
+   
+    $tenant_name = get_the_title($tenant_id);   
+    $post_title  = $tenant_name . ' - ' . date('M Y', strtotime($date));   
+   
+    $updated_payment_id = wp_update_post([ 
+        'ID'          => $payment_id, 
+        'post_title'  => $post_title, 
+    ]); 
+   
+    if($updated_payment_id && !is_wp_error($updated_payment_id)) {   
+        update_field('associated_tenant', $tenant_id, $payment_id);    
+        update_field('amount_paid', $amount, $payment_id);             
+        update_field('date_of_payment', $date, $payment_id);   
+        update_field('mode_of_payment', $method, $payment_id);   
+   
+        wp_send_json_success(['payment_id' => $payment_id]);   
+    }   
+   
+    wp_send_json_error();   
+} 
+ 
+add_action('wp_ajax_ef_action_delete_payment_record', 'ef_callback_ajax_delete_payment'); 
+function ef_callback_ajax_delete_payment() { 
+    $payment_id = isset($_POST['payment_id']) ? intval($_POST['payment_id']) : 0; 
+    if (!$payment_id) { 
+        wp_send_json_error(['message' => 'Invalid payment ID.']); 
+    } 
+
+    if (get_post_type($payment_id) !== 'payment') {
+        wp_send_json_error(['message' => 'Invalid post type.']);
+    }
+
+    if (wp_delete_post($payment_id, true)) { 
+        wp_send_json_success(); 
+    } else { 
+        wp_send_json_error(['message' => 'Failed to delete transaction.']); 
+    } 
+} 
+   
+add_shortcode('ef_payments_stats', function() {   
+    $current_month = date('m');   
+    $current_year  = date('Y');   
+   
+    $this_month_revenue = 0.00;   
+    $month_query = new WP_Query([   
+        'post_type'      => 'payment',   
+        'post_status'    => 'publish',   
+        'posts_per_page' => -1,   
+        'date_query'     => [   
+            [   
+                'year'  => $current_year,   
+                'month' => $current_month,   
+            ]   
+        ]   
+    ]);   
+   
+    if ($month_query->have_posts()) {   
+        while ($month_query->have_posts()) {   
+            $month_query->the_post();   
+            $amount = get_field('amount_paid', get_the_ID());    
+            if ($amount) {   
+                $this_month_revenue += floatval($amount);   
+            }   
+        }   
+        wp_reset_postdata();   
+    }   
+   
+    $count_payments = wp_count_posts('payment');   
+    $total_payments_logged = isset($count_payments->publish) ? intval($count_payments->publish) : 0;   
+   
+    $count_tenants = wp_count_posts('ef_tenant');   
+    $active_tenants_count = isset($count_tenants->publish) ? intval($count_tenants->publish) : 0;   
+   
+    ob_start();   
+    ?>   
+    <style>   
+           
+   
+        @media (max-width: 768px) {   
+            .ef-stats-cards-row {   
+                grid-template-columns: 1fr;   
+                gap: 12px;   
+            }   
+        }   
+    </style>   
+   
+    <div class="ef-stats-cards-row">   
+   
+        <div class="ef-stat-card-surface">   
+            <div class="ef-stat-card-label">This Month</div>   
+            <div class="ef-stat-card-value ef-text-accent-green">   
+                AED <?php echo number_format($this_month_revenue); ?>   
+            </div>   
+        </div>   
+   
+        <div class="ef-stat-card-surface">   
+            <div class="ef-stat-card-label">Total Payments Logged</div>   
+            <div class="ef-stat-card-value">   
+                <?php echo esc_html($total_payments_logged); ?>   
+            </div>   
+        </div>   
+   
+        <div class="ef-stat-card-surface">   
+            <div class="ef-stat-card-label">Active Tenants</div>   
+            <div class="ef-stat-card-value">   
+                <?php echo esc_html($active_tenants_count); ?>   
+            </div>   
+        </div>   
+   
+    </div>   
+    <?php   
+    return ob_get_clean();   
+});   
+  
+ add_shortcode('ef_payments_table', function() {   
+$payments_dataset = [];   
+$unique_tenants = [];   
+$unique_periods = [];   
+$methods_list = ['Bank Transfer', 'Cash', 'Cheque', 'Card Payment'];   
+   
+$query = new WP_Query([     
+    'post_type'      => 'payment',     
+    'post_status'    => 'publish',     
+    'posts_per_page' => -1,     
+    'meta_key'       => 'date_of_payment',     
+    'orderby'        => 'meta_value',     
+    'order'          => 'DESC'     
+]);     
+   
+if ($query->have_posts()) {     
+    while ($query->have_posts()) {     
+        $query->the_post();     
+        $payment_id = get_the_ID();     
+   
+        $tenant_id  = get_field('associated_tenant', $payment_id);     
+        $amount     = get_field('amount_paid', $payment_id);     
+        $raw_date   = get_field('date_of_payment', $payment_id);     
+        $method     = get_field('mode_of_payment', $payment_id);     
+   
+        $amount_val   = $amount ? floatval($amount) : 0.00;     
+        $method_txt   = $method ? $method : 'Bank Transfer';     
+         
+        $tenant_name = 'Out of contract'; 
+        if ($tenant_id) { 
+            $tenant_post = get_post($tenant_id); 
+            if ($tenant_post && $tenant_post->post_type === 'ef_tenant' && $tenant_post->post_status === 'publish') { 
+                $tenant_name = $tenant_post->post_title; 
+            } 
+        } 
+   
+        $property_name = $tenant_id ? get_field('property_unit_name', $tenant_id) : '';     
+        if (!$property_name) {     
+            $property_name = 'Lakeside Residences';      
+        }     
+   
+        if ($raw_date) {     
+            $timestamp   = strtotime($raw_date);     
+            $date_format = date('n/j/Y', $timestamp);     
+            $iso_date    = date('Y-m-d', $timestamp); 
+            $period_val  = date('Y-m', $timestamp);     
+        } else {     
+            $date_format = get_the_date('n/j/Y', $payment_id);     
+            $iso_date    = get_the_date('Y-m-d', $payment_id); 
+            $period_val  = get_the_date('Y-m', $payment_id);     
+        }     
+   
+        if ($tenant_id && $tenant_name !== 'Out of contract' && !in_array($tenant_name, $unique_tenants)) {     
+            $unique_tenants[] = $tenant_name;     
+        }     
+        if (!in_array($period_val, $unique_periods)) {     
+            $unique_periods[] = $period_val;     
+        }     
+   
+        $payments_dataset[] = [     
+            'id'        => $payment_id,     
+            'tenant'    => $tenant_name, 
+            'tenant_id' => $tenant_id, 
+            'property'  => $property_name,     
+            'period'    => $period_val,     
+            'method'    => $method_txt,     
+            'date'      => $date_format, 
+            'raw_date'  => $iso_date, 
+            'amount'    => $amount_val     
+        ];     
+    }     
+    wp_reset_postdata();     
+}     
+   
+sort($unique_tenants);     
+sort($unique_periods);     
+   
+$json_payload = json_encode($payments_dataset);     
+ob_start();     
+?>     
+   
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>     
+   
+<style>     
+         
+   
+    @media (max-width: 768px) {     
+        .ef-ledger-control-bar { flex-direction: column; align-items: stretch; }     
+        .ef-ledger-select-filter { max-width: 100%; }     
+        .ef-ledger-metric-tally { margin-left: 0; text-align: left; padding-top: 6px; }     
+        .ef-ledger-table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }    
+        .ef-core-tabular-matrix { min-width: 700px; }    
+    }     
+ 
+    .ef-btn-row-action { 
+            display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #334155;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    box-sizing: border-box;
+    } 
+    
+    .ef-btn-row-action.delete:hover { 
+        color: #ff1100 !important;
+    background: #fff !important;
+    } 
+</style>     
+   
+<div class="ef-ledger-table-wrapper">     
+    <div class="ef-ledger-control-bar">     
+        <div class="ef-ledger-search-box-holder">     
+            <input type="text" id="efLedgerInputSearch" oninput="efProcessLedgerQueryMatrix()" placeholder="Search tenant, property, method...">     
+        </div>     
+   
+        <select id="efLedgerSelectTenant" onchange="efProcessLedgerQueryMatrix()" class="ef-ledger-select-filter">     
+            <option value="">All tenants</option>     
+            <?php foreach($unique_tenants as $tenant): ?>     
+                <option value="<?php echo esc_attr($tenant); ?>"><?php echo esc_html($tenant); ?></option>     
+            <?php endforeach; ?>     
+        </select>     
+   
+        <select id="efLedgerSelectMethod" onchange="efProcessLedgerQueryMatrix()" class="ef-ledger-select-filter">     
+            <option value="">All methods</option>     
+            <?php foreach($methods_list as $method): ?>     
+                <option value="<?php echo esc_attr($method); ?>"><?php echo esc_html($method); ?></option>     
+            <?php endforeach; ?>     
+        </select>     
+   
+        <select id="efLedgerSelectPeriod" onchange="efProcessLedgerQueryMatrix()" class="ef-ledger-select-filter">     
+            <option value="">All periods</option>     
+            <?php foreach($unique_periods as $period): ?>     
+                <option value="<?php echo esc_attr($period); ?>"><?php echo esc_html($period); ?></option>     
+            <?php endforeach; ?>     
+        </select>     
+   
+        <div class="ef-ledger-metric-tally" id="efLedgerCounterDisplay">     
+            0 results • <span>AED 0</span>     
+        </div>     
+    </div>     
+   
+    <table class="ef-core-tabular-matrix">     
+        <thead>     
+            <tr>     
+                <th>Tenant</th>     
+                <th>Property</th>     
+                <th>Period</th>     
+                <th>Method</th>     
+                <th>Date</th>     
+                <th>Amount</th>     
+                <th style="text-align: right;">Actions</th>     
+            </tr>     
+        </thead>     
+        <tbody id="efLedgerGridInjectionTarget">     
+        </tbody>     
+    </table>     
+    <input type="hidden" id="ef_table_nonce" value="<?php echo wp_create_nonce('ef_payment_nonce'); ?>">
+   
+    <div id="efLedgerDataEmptyState" class="ef-ledger-empty-state-notice" style="display:none;">     
+        No verified ledger transaction records match your parameters.     
+    </div>     
+</div>     
+   
+<script>     
+const efLedgerSourcePayload = <?php echo $json_payload; ?>;     
+   
+const efGlobalLogoBase64 = "https://estateflow.digital/wp-content/uploads/2026/06/cropped-estate.png"     
+   
+function efProcessLedgerQueryMatrix() {     
+    const queryStr = document.getElementById('efLedgerInputSearch').value.toLowerCase();     
+    const selTenant = document.getElementById('efLedgerSelectTenant').value;     
+    const selMethod = document.getElementById('efLedgerSelectMethod').value;     
+    const selPeriod = document.getElementById('efLedgerSelectPeriod').value;     
+   
+    const outputBody = document.getElementById('efLedgerGridInjectionTarget');     
+    const fallbackEl = document.getElementById('efLedgerDataEmptyState');     
+   
+    outputBody.innerHTML = '';     
+    let matchCount = 0;     
+    let revenueAccumulator = 0;     
+   
+    efLedgerSourcePayload.forEach(entry => {     
+        const matchSearch = !queryStr ||      
+                            entry.tenant.toLowerCase().includes(queryStr) ||      
+                            entry.property.toLowerCase().includes(queryStr) ||      
+                            entry.method.toLowerCase().includes(queryStr);     
+   
+        const matchTenant = !selTenant || entry.tenant === selTenant;     
+        const matchMethod = !selMethod || entry.method === selMethod;     
+        const matchPeriod = !selPeriod || entry.period === selPeriod;     
+   
+        if (matchSearch && matchTenant && matchMethod && matchPeriod) {     
+            matchCount++;     
+            revenueAccumulator += entry.amount;     
+   
+            const rowHtml = document.createElement('tr');     
+            if (entry.tenant === 'Out of contract') {
+                rowHtml.style.backgroundColor = '#ff9393';
+            }
+            rowHtml.innerHTML = `     
+                <td class="ef-cell-bold-tenant">${efEscapeOutputChar(entry.tenant)}</td>     
+                <td style="color: #475569;">${efEscapeOutputChar(entry.property)}</td>     
+                <td><span class="ef-badge-pill-period">${efEscapeOutputChar(entry.period)}</span></td>     
+                <td style="color: #475569;">${efEscapeOutputChar(entry.method)}</td>     
+                <td style="color: #475569;">${efEscapeOutputChar(entry.date)}</td>     
+                <td class="ef-cell-accent-currency-green">AED ${Number(entry.amount).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</td>     
+                <td style="text-align: right;">     
+                    <button class="ef-btn-receipt-pdf-download" title="Download PDF" onclick='efDownloadReceipt(efLedgerSourcePayload.find(item => item.id === ${entry.id}))'>     
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:inline-block; vertical-align:middle; margin-top:-2px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>     
+                    </button>     
+                    <button class="ef-btn-row-action" title="Edit" onclick='efEditTransaction(${entry.id})'> 
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:inline-block; vertical-align:middle; margin-top:-2px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> 
+                    </button> 
+                    <button class="ef-btn-row-action delete" title="Delete" onclick='efDeleteTransaction(${entry.id})'> 
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:inline-block; vertical-align:middle; margin-top:-2px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg> 
+                    </button> 
+                </td>     
+            `;     
+            outputBody.appendChild(rowHtml);     
+        }     
+    });     
+   
+    document.getElementById('efLedgerCounterDisplay').innerHTML = `${matchCount} results • <span>AED ${revenueAccumulator.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span>`;     
+    fallbackEl.style.display = (matchCount === 0) ? 'block' : 'none';     
+}     
+   
+function efEscapeOutputChar(str) {     
+    if (!str) return '';     
+    return String(str)     
+        .replace(/&/g, '&amp;')     
+        .replace(/</g, '&lt;')     
+        .replace(/>/g, '&gt;')     
+        .replace(/"/g, '&quot;')     
+        .replace(/'/g, '&#039;');     
+}     
+ 
+function efEditTransaction(id) { 
+    const entry = efLedgerSourcePayload.find(item => item.id === id); 
+    if (!entry) return; 
+ 
+    document.getElementById('efModalTitle').innerText = 'Edit payment'; 
+    document.getElementById('efSubmitBtn').innerText = 'Update payment'; 
+    document.getElementById('ef_log_payment_id').value = entry.id; 
+    document.getElementById('ef_log_tenant').value = entry.tenant_id; 
+    document.getElementById('ef_log_amount').value = entry.amount; 
+    document.getElementById('ef_log_method').value = entry.method; 
+    document.getElementById('ef_log_period').value = entry.period; 
+    document.getElementById('ef_log_date').value = entry.raw_date; 
+ 
+    document.getElementById('efLogPaymentGlobalModal').style.display = 'flex'; 
+} 
+ 
+function efDeleteTransaction(id) { 
+    if (confirm("are you sure you want delete this transaction it will be deleted forever")) { 
+        var fd = new FormData(); 
+        fd.append('action', 'ef_action_delete_payment_record'); 
+        fd.append('nonce', document.getElementById('ef_table_nonce').value);
+        fd.append('payment_id', id); 
+ 
+        fetch('<?php echo admin_url('admin-ajax.php'); ?>', { method: 'POST', body: fd }) 
+        .then(res => res.json()) 
+        .then(res => { 
+            if (res.success) { 
+                window.location.reload(); 
+            } else { 
+                alert(res.data.message || 'Deletion failure.'); 
+            } 
+        }).catch(err => { alert('Database communication channel interrupted.'); }); 
+    } 
+} 
+  
+function efDownloadReceipt(d) {  
+    if (!d) return;  
+    const esc = (s) => {  
+        if (!s) return "";  
+        return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");  
+    };  
+  
+    const ref = d.ref || ('REC-' + String(d.id).padStart(6, '0'));  
+    const tenant = d.tenant || 'Unknown';  
+    const prop = d.property || d.prop || 'N/A';  
+    const date = d.date || '';  
+    const period = d.period || '';  
+    const method = d.method || '';  
+    const amount = d.amount_formatted || (typeof d.amount === 'number' ? d.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : d.amount);  
+  
+    const wrapper = document.createElement('div');  
+    wrapper.style.position = 'absolute';  
+    wrapper.style.left = '-9999px';  
+    wrapper.style.top = '0';  
+    document.body.appendChild(wrapper);  
+  
+    wrapper.innerHTML = `  
+        <div class="receipt-container" style="padding:40px; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color:#334155; width:800px; background:#fff;">  
+            <div class="receipt-header" style="display:flex; justify-content:space-between; border-bottom:2px solid #f1f5f9; padding-bottom:20px;">  
+                <div style="display:flex; align-items:center; gap:15px;">  
+                    <img src="https://estateflow.digital/wp-content/uploads/2026/06/cropped-estate.png" style="width:48px; height:48px; object-fit:contain;">  
+                    <div>  
+                        <div style="color:#0f172a; font-size:22px; font-weight:800; letter-spacing:-0.5px;">ESTATE FLOW</div>  
+                        <div style="color:#64748b; font-size:13px; font-weight:500;">Property Suite</div>  
+                    </div>  
+                </div>  
+                <div style="text-align:right;">    
+                    <div style="color:#00a86b; font-size:24px; font-weight:800; margin-bottom:4px; letter-spacing:-0.5px;">PAYMENT RECEIPT</div>    
+                    <div style="color:#64748b; font-size:13px;">Receipt Reference: <span id="r-ref" style="font-weight:700; color:#0f172a;">${esc(ref)}</span></div>    
+                </div>    
+            </div>    
+            <div style="display:flex; justify-content:space-between; margin:32px 0;">    
+                <div>    
+                    <div style="color:#94a3b8; font-size:11px; font-weight:700; text-transform:uppercase; margin-bottom:12px; letter-spacing:0.5px;">Received From</div>     
+                    <div style="font-size:20px; font-weight:700; color:#0f172a; margin-bottom:4px;">${esc(tenant)}</div>   
+                    <div style="color:#64748b; font-size:14px;">${esc(prop)}</div>   
+                </div>   
+                <div style="text-align:right; min-width:240px;">   
+                    <div style="color:#94a3b8; font-size:11px; font-weight:700; text-transform:uppercase; margin-bottom:12px; letter-spacing:0.5px;">Transaction Details</div>   
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; font-size:13px; text-align:left;">   
+                        <span style="color:#64748b; font-weight:600;">Payment Date:</span><span style="text-align:right; font-weight:700; color:#0f172a;">${esc(date)}</span>   
+                        <span style="color:#64748b; font-weight:600;">Allocation Period:</span><span style="text-align:right; font-weight:700; color:#0f172a;">${esc(period)}</span>   
+                        <span style="color:#64748b; font-weight:600;">Method:</span><span style="text-align:right; font-weight:700; color:#0f172a;">${esc(method)}</span>   
+                    </div>   
+                </div>   
+            </div>   
+            <table style="width:100%; border-collapse:collapse; margin-top:32px;">   
+                <thead>   
+                    <tr>   
+                        <th style="text-align:left; border-bottom:1px solid #e2e8f0; padding:12px 0; color:#94a3b8; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">Description</th>   
+                        <th style="text-align:right; border-bottom:1px solid #e2e8f0; padding:12px 0; color:#94a3b8; font-size:11px; text-transform:uppercase; letter-spacing:0.5px;">Total Allocation</th>   
+                    </tr>   
+                </thead>   
+                <tbody>   
+                    <tr>   
+                        <td style="padding:20px 0; border-bottom:1px solid #f1f5f9;">   
+                            <div style="font-weight:700; color:#0f172a; margin-bottom:4px; font-size:15px;">Rental Payment Allocation</div>   
+                            <div style="color:#64748b; font-size:13px;">Unit Reference: ${esc(prop)} (${esc(period)})</div>   
+                        </td>   
+                        <td style="text-align:right; padding:20px 0; border-bottom:1px solid #f1f5f9; font-weight:700; font-size:16px; color:#0f172a;">   
+                            AED <span>${esc(amount)}</span>   
+                        </td>   
+                    </tr>   
+                </tbody>   
+            </table>   
+            <div style="display:flex; justify-content:flex-end; align-items:center; gap:32px; margin-top:32px;">   
+                <span style="font-weight:700; color:#0f172a; font-size:15px;">Amount Paid:</span>   
+                <span style="color:#00a86b; font-size:24px; font-weight:800; letter-spacing:-0.5px;">AED <span>${esc(amount)}</span></span>   
+            </div>   
+            <div style="text-align:center; color:#94a3b8; font-size:11px; margin-top:60px; padding-top:20px; border-top:1px solid #f1f5f9;">   
+                This is an electronically generated document. No physical signature is required.<br>   
+                <span style="font-style:italic; color:#cbd5e1; margin-top:8px; display:block;">Thank you for your business!</span>   
+            </div>   
+        </div>   
+    `;  
+  
+    const element = wrapper.querySelector(".receipt-container");  
+    html2pdf().from(element).set({    
+        margin: 0.2,    
+        filename: `Receipt-${ref}.pdf`,    
+        image: { type: "jpeg", quality: 0.98 },    
+        html2canvas: { scale: 2, logging: false, useCORS: true, scrollY: 0, scrollX: 0 },    
+        jsPDF: { unit: "in", format: "letter", orientation: "portrait" }    
+    }).save().then(() => {  
+        document.body.removeChild(wrapper);  
+    });  
+}  
+   
+document.addEventListener("DOMContentLoaded", function() {     
+    efProcessLedgerQueryMatrix();     
+});     
+</script>     
+<?php     
+return ob_get_clean();      
+}); 
