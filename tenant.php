@@ -389,7 +389,7 @@ add_shortcode('tenant_list', function() {
                 if($p_query->have_posts()){ while($p_query->have_posts()){$p_query->the_post();$paid_this_month+=floatval(get_field('amount_paid',get_the_ID()));}wp_reset_postdata();}
                 $initials=''; $words=explode(' ', $name); foreach($words as $w) $initials.=strtoupper(substr($w,0,1));
             ?>
-                <div class="ef-tenant-card-item" data-id="<?php echo $tid; ?>" id="tenant-row-<?php echo $tid; ?>" onclick="efDispatchGlobalView(<?php echo $tid; ?>)">
+                <div class="ef-tenant-card-item <?php echo $count===0?'ef-active-tenant':''; ?>" data-id="<?php echo $tid; ?>" id="tenant-row-<?php echo $tid; ?>" onclick="efDispatchGlobalView(<?php echo $tid; ?>)">
                     <div class="ef-tenant-meta"><div class="ef-avatar-circle"><?php echo substr($initials,0,2); ?></div>
                         <div class="ef-tenant-info-text"><div class="ef-tenant-name"><?php echo esc_html($name); ?></div><div class="ef-tenant-location"><?php echo esc_html($addr); ?></div></div>
                     </div>
@@ -416,14 +416,64 @@ add_shortcode('tenant_list', function() {
         });
     };
     document.addEventListener("DOMContentLoaded",()=>{
-        // const act=document.querySelector('.ef-active-tenant');
-        // if(act) setTimeout(()=>efDispatchGlobalView(act.getAttribute('data-id')), 300);
+        const act=document.querySelector('.ef-active-tenant');
+        if(act && window.innerWidth > 768) setTimeout(()=>efDispatchGlobalView(act.getAttribute('data-id')), 300);
     });
     </script>
     <?php return ob_get_clean();
 });
 add_shortcode('tenant_profile', function() {
     ob_start(); ?>
+    <style>
+        @media (min-width: 769px) {
+            #efTenantProfileModal {
+                display: block !important;
+                position: static !important;
+                background: none !important;
+                width: auto !important;
+                height: auto !important;
+                flex: 1;
+                z-index: auto !important;
+            }
+            #efTenantProfileModal .ef-popup-modal-box {
+                position: static !important;
+                max-width: none !important;
+                width: 100% !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                background: none !important;
+            }
+            #efTenantProfileModal .ef-popup-modal-box > button {
+                display: none !important;
+            }
+            #efWorkspaceDynamicScreen {
+                background: #fff;
+                border-radius: 12px;
+                border: 1px solid #e2e8f0;
+                padding: 24px;
+            }
+        }
+        /* Basic modal styles in case they are not defined elsewhere */
+        .ef-popup-modal-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        .ef-popup-modal-box {
+            background: #fff;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+    </style>
     <div id="efTenantProfileModal" class="ef-popup-modal-container" style="display:none;" onclick="if(event.target === this) this.style.display='none';">
         <div class="ef-popup-modal-box" style="max-width: 800px; width: 90%; position: relative;">
             <button onclick="document.getElementById('efTenantProfileModal').style.display='none';" style="position: absolute; top: 15px; right: 15px; border: none; background: transparent; font-size: 20px; cursor: pointer; color: #64748b;">✕</button>
@@ -432,7 +482,7 @@ add_shortcode('tenant_profile', function() {
             </div>
         </div>
     </div>
-    <div id="efGlobalRightEditModal" class="ef-popup-modal-container">
+    <div id="efGlobalRightEditModal" class="ef-popup-modal-container" style="display:none;" onclick="if(event.target === this) this.style.display='none';">
         <div class="ef-popup-modal-box">
             <h3 style="margin-top:0;">Modify Tenant Profile</h3>
             <input type="hidden" id="modal_field_id">
@@ -526,7 +576,9 @@ add_shortcode('tenant_profile', function() {
         window.addEventListener('ef_load_tenant', e => {
             const screen = document.getElementById('efWorkspaceDynamicScreen');
             const modal = document.getElementById('efTenantProfileModal');
-            modal.style.display = 'flex';
+            if (window.innerWidth <= 768) {
+                modal.style.display = 'flex';
+            }
             screen.innerHTML = '<div style="text-align:center; padding:40px;">Loading profile...</div>';
             const fd = new FormData(); fd.append('action', 'eftm_render_tenant_profile'); fd.append('tenant_id', e.detail.id);
             fetch(ajax, { method: 'POST', body: fd }).then(r => r.text()).then(html => {
