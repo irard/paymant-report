@@ -1,6 +1,7 @@
 <?php
 
 add_shortcode('ef_dashboard_actions', function() { 
+    if (!is_user_logged_in()) return '';
     $current_year = date('Y'); 
     $selected_year = isset($_GET['report_year']) ? intval($_GET['report_year']) : $current_year;
     ob_start(); 
@@ -92,6 +93,7 @@ add_shortcode('ef_dashboard_actions', function() {
 }); 
  
 add_shortcode('monthly_breakdown', function() { 
+    if (!is_user_logged_in()) return '';
     $current_year = date('Y'); 
     $selected_year = isset($_GET['report_year']) ? intval($_GET['report_year']) : $current_year;
  
@@ -105,15 +107,16 @@ add_shortcode('monthly_breakdown', function() {
         'posts_per_page' => -1, 
     )); 
  
-    $monthly_rent_expected = 0.00; 
+    $tenants = [];
     if ($t_query->have_posts()) { 
         while ($t_query->have_posts()) { 
             $t_query->the_post(); 
             $t_id = get_the_ID(); 
-            $rent_val = get_field('monthly_rent', $t_id) ?: get_post_meta($t_id, 'monthly_rent', true);
-            if ($rent_val) { 
-                $monthly_rent_expected += floatval($rent_val); 
-            } 
+            $tenants[] = [
+                'rent'  => floatval(get_field('monthly_rent', $t_id) ?: get_post_meta($t_id, 'monthly_rent', true)),
+                'start' => get_field('tenant_start', $t_id) ?: get_post_meta($t_id, 'tenant_start', true),
+                'end'   => get_field('tenant_end', $t_id) ?: get_post_meta($t_id, 'tenant_end', true),
+            ];
         } 
         wp_reset_postdata(); 
     } 
@@ -123,6 +126,24 @@ add_shortcode('monthly_breakdown', function() {
  
     for ($m = 1; $m <= 12; $m++) { 
         $padded_month = str_pad($m, 2, '0', STR_PAD_LEFT); 
+        $first_day_of_month = $selected_year . '-' . $padded_month . '-01';
+        $last_day_of_month  = date('Y-m-t', strtotime($first_day_of_month));
+
+        $monthly_rent_expected = 0.00;
+        foreach ($tenants as $tenant) {
+            $t_start = $tenant['start'];
+            $t_end   = $tenant['end'];
+
+            // Check if tenant was active during this month
+            // Active if (start date <= last day of month) AND (no end date OR end date >= first day of month)
+            $is_active = true;
+            if (!empty($t_start) && $t_start > $last_day_of_month) $is_active = false;
+            if ($is_active && !empty($t_end) && $t_end < $first_day_of_month) $is_active = false;
+
+            if ($is_active) {
+                $monthly_rent_expected += $tenant['rent'];
+            }
+        }
  
         $args = array( 
             'post_type'      => $payment_post_type, 
