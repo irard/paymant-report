@@ -1,6 +1,7 @@
 <?php
 
 add_shortcode('ef_log_payment_btn', function() {   
+    if (!is_user_logged_in()) return '';
     $tenants_query = new WP_Query([   
         'post_type'      => 'ef_tenant',   
         'post_status'    => 'publish',   
