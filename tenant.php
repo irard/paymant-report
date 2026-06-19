@@ -65,7 +65,7 @@ function eftm_handle_create_tenant() {
     if ( ! isset($_POST['create_tenant_nonce']) || ! wp_verify_nonce($_POST['create_tenant_nonce'], 'create_tenant_action') ) {
         wp_send_json_error('Invalid request (nonce).', 403);
     }
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.', 403);
     }
     $name   = sanitize_text_field($_POST['tenant_name'] ?? '');
@@ -101,6 +101,9 @@ function eftm_handle_check_property_availability() {
     if (!isset($_POST['security']) || !wp_verify_nonce($_POST['security'], 'property_availability_nonce')) {
         wp_send_json_error('Invalid security check.', 403);
     }
+    if (!is_user_logged_in()) {
+        wp_send_json_error('Unauthorized.', 403);
+    }
     $property_id = intval($_POST['property_id'] ?? 0);
     $tenant_id   = intval($_POST['tenant_id'] ?? 0);
     if (!$property_id) wp_send_json_error('Property ID is required.');
@@ -116,7 +119,7 @@ function eftm_handle_check_property_availability() {
     ]);
 }
 function eftm_handle_ajax_tenant_breakdown() {
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_die('Unauthorized');
     }
     $tenant_id = isset($_POST['tenant_id']) ? intval($_POST['tenant_id']) : 0;
@@ -217,7 +220,7 @@ function eftm_execute_ajax_tenant_modification() {
     if (!isset($_POST['security']) || !wp_verify_nonce($_POST['security'], 'edit_tenant_nonce')) {
         wp_send_json_error('Invalid security check.', 403);
     }
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.', 403);
     }
     $tid = intval($_POST['tenant_id'] ?? 0);
@@ -245,7 +248,7 @@ function eftm_execute_ajax_tenant_deletion() {
     if (!isset($_POST['security']) || !wp_verify_nonce($_POST['security'], 'delete_tenant_nonce')) {
         wp_send_json_error('Invalid security check.', 403);
     }
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.', 403);
     }
     $tid = intval($_POST['tenant_id'] ?? 0);
@@ -253,6 +256,9 @@ function eftm_execute_ajax_tenant_deletion() {
     else wp_send_json_error('Delete failed.');
 }
 function eftm_global_execute_properties_fetch() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error('Unauthorized.', 403);
+    }
     $q = new WP_Query(['post_type' => 'property', 'post_status' => 'publish', 'posts_per_page' => -1, 'orderby' => 'title', 'order' => 'ASC']);
     $res = [];
     if ($q->have_posts()) {
@@ -389,7 +395,7 @@ add_shortcode('tenant_list', function() {
                 if($p_query->have_posts()){ while($p_query->have_posts()){$p_query->the_post();$paid_this_month+=floatval(get_field('amount_paid',get_the_ID()));}wp_reset_postdata();}
                 $initials=''; $words=explode(' ', $name); foreach($words as $w) $initials.=strtoupper(substr($w,0,1));
             ?>
-                <div class="ef-tenant-card-item <?php echo $count===0?'ef-active-tenant':''; ?>" data-id="<?php echo $tid; ?>" id="tenant-row-<?php echo $tid; ?>" onclick="efDispatchGlobalView(<?php echo $tid; ?>)">
+                <div class="ef-tenant-card-item" data-id="<?php echo $tid; ?>" id="tenant-row-<?php echo $tid; ?>" onclick="efDispatchGlobalView(<?php echo $tid; ?>)">
                     <div class="ef-tenant-meta"><div class="ef-avatar-circle"><?php echo substr($initials,0,2); ?></div>
                         <div class="ef-tenant-info-text"><div class="ef-tenant-name"><?php echo esc_html($name); ?></div><div class="ef-tenant-location"><?php echo esc_html($addr); ?></div></div>
                     </div>
@@ -416,8 +422,8 @@ add_shortcode('tenant_list', function() {
         });
     };
     document.addEventListener("DOMContentLoaded",()=>{
-        const act=document.querySelector('.ef-active-tenant');
-        if(act && window.innerWidth > 768) setTimeout(()=>efDispatchGlobalView(act.getAttribute('data-id')), 300);
+        // const act=document.querySelector('.ef-active-tenant');
+        // if(act && window.innerWidth > 768) setTimeout(()=>efDispatchGlobalView(act.getAttribute('data-id')), 300);
     });
     </script>
     <?php return ob_get_clean();
