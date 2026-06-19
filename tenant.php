@@ -6,6 +6,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 add_action('wp_ajax_eftm_create_tenant', 'eftm_handle_create_tenant');
 add_action('wp_ajax_eftm_check_property_availability', 'eftm_handle_check_property_availability');
 add_action('wp_ajax_eftm_render_tenant_profile', 'eftm_handle_ajax_tenant_breakdown');
+add_action('wp_ajax_nopriv_eftm_render_tenant_profile', 'eftm_handle_ajax_tenant_breakdown');
 add_action('wp_ajax_eftm_edit_tenant', 'eftm_execute_ajax_tenant_modification');
 add_action('wp_ajax_eftm_delete_tenant', 'eftm_execute_ajax_tenant_deletion');
 add_action('wp_ajax_eftm_get_properties', 'eftm_global_execute_properties_fetch');
@@ -119,9 +120,6 @@ function eftm_handle_check_property_availability() {
     ]);
 }
 function eftm_handle_ajax_tenant_breakdown() {
-    if (!is_user_logged_in()) {
-        wp_die('Unauthorized');
-    }
     $tenant_id = isset($_POST['tenant_id']) ? intval($_POST['tenant_id']) : 0;
     if (!$tenant_id) wp_die();
     $tenant_name    = get_the_title($tenant_id);
@@ -168,6 +166,7 @@ function eftm_handle_ajax_tenant_breakdown() {
                 <div style="color: #64748b; font-size: 14px; font-weight: 500;"><?php echo esc_html($property_display); ?></div>
             </div>
         </div>
+        <?php if (is_user_logged_in()) : ?>
         <div class="ef-action-btn-group">
             <button class="ef-btn-action"
                     data-id="<?php echo $tenant_id; ?>" data-name="<?php echo esc_attr($tenant_name); ?>" data-property-id="<?php echo $propId; ?>"
@@ -180,6 +179,7 @@ function eftm_handle_ajax_tenant_breakdown() {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
             </button>
         </div>
+        <?php endif; ?>
     </div>
     <div class="ef-meta-grid-3col">
         <div class="ef-meta-info-card"><div class="ef-meta-card-label">Monthly rent</div><div class="ef-meta-card-value ef-text-green">AED <?php echo number_format($monthly_rent, 2); ?></div></div>
