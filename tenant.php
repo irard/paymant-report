@@ -283,6 +283,7 @@ function eftm_global_execute_properties_fetch() {
 
 
 add_shortcode('add_tenant', function(){
+    if (!is_user_logged_in()) return '';
     ob_start(); ?>
     <button id="atc-open" class="atc-open-btn">+ Add tenant</button>
     <div id="atc-modal" class="atc-modal" aria-hidden="true" style="display:none;">
@@ -421,10 +422,6 @@ add_shortcode('tenant_list', function() {
             c.style.display=c.querySelector('.ef-tenant-name').textContent.toLowerCase().includes(f)?'flex':'none';
         });
     };
-    document.addEventListener("DOMContentLoaded",()=>{
-        // const act=document.querySelector('.ef-active-tenant');
-        // if(act && window.innerWidth > 768) setTimeout(()=>efDispatchGlobalView(act.getAttribute('data-id')), 300);
-    });
     </script>
     <?php return ob_get_clean();
 });
