@@ -286,7 +286,7 @@ add_shortcode('add_tenant', function(){
     if (!is_user_logged_in()) return '';
     ob_start(); ?>
     <button id="atc-open" class="atc-open-btn">+ Add tenant</button>
-    <div id="atc-modal" class="atc-modal" aria-hidden="true" style="display:none;">
+    <div id="atc-modal" class="atc-modal" aria-hidden="true" style="display:none;" onclick="if(event.target === this) { this.style.display='none'; document.body.classList.remove('ef-no-scroll'); }">
       <div class="atc-panel" role="dialog" aria-modal="true" aria-labelledby="atc-title">
         <div class="atc-header">
           <h3 id="atc-title">Add New Tenant</h3>
@@ -316,8 +316,16 @@ add_shortcode('add_tenant', function(){
       document.addEventListener('DOMContentLoaded', function(){
         const openBtn = document.getElementById('atc-open'), modal = document.getElementById('atc-modal'), closeBtn = document.getElementById('atc-close'), cancelBtn = document.getElementById('atc-cancel'), form = document.getElementById('atc-form'), propSelect = document.getElementById('atc-property');
         if (!openBtn || !modal || !form) return;
-        function openModal(){ modal.style.display = 'flex'; loadProperties(); }
-        function closeModal(){ modal.style.display = 'none'; form.reset(); }
+        function openModal(){
+            modal.style.display = 'flex';
+            document.body.classList.add('ef-no-scroll');
+            loadProperties();
+        }
+        function closeModal(){
+            modal.style.display = 'none';
+            document.body.classList.remove('ef-no-scroll');
+            form.reset();
+        }
         openBtn.onclick = (e) => { e.preventDefault(); openModal(); };
         closeBtn.onclick = cancelBtn.onclick = () => closeModal();
         modal.onclick = (e) => { if(e.target===modal) closeModal(); };
@@ -366,7 +374,7 @@ add_shortcode('add_tenant', function(){
         };
         form.onsubmit = e => {
           e.preventDefault(); const fd=new FormData(form); fd.append('action','eftm_create_tenant');
-          fetch(ajax,{method:'POST', body:fd}).then(r=>r.json()).then(res=>{ if(res.success){ alert('Added!'); location.reload(); } });
+          fetch(ajax,{method:'POST', body:fd}).then(r=>r.json()).then(res=>{ if(res.success){ alert('Added!'); document.body.classList.remove('ef-no-scroll'); location.reload(); } });
         };
       });
     })();
@@ -470,6 +478,36 @@ add_shortcode('tenant_profile', function() {
             align-items: center;
             justify-content: center;
             z-index: 9999;
+            overflow-y: auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        body.ef-no-scroll {
+            overflow: hidden !important;
+        }
+        .atc-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            overflow-y: auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .atc-panel {
+            background: #fff;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            max-width: 600px;
+            width: 100%;
+            position: relative;
         }
         .ef-popup-modal-box {
             background: #fff;
@@ -478,16 +516,17 @@ add_shortcode('tenant_profile', function() {
             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
         }
     </style>
-    <div id="efTenantProfileModal" class="ef-popup-modal-container" style="display:none;" onclick="if(event.target === this) this.style.display='none';">
+    <div id="efTenantProfileModal" class="ef-popup-modal-container" style="display:none;" onclick="if(event.target === this) { this.style.display='none'; document.body.classList.remove('ef-no-scroll'); }">
         <div class="ef-popup-modal-box" style="max-width: 800px; width: 90%; position: relative;">
-            <button onclick="document.getElementById('efTenantProfileModal').style.display='none';" style="position: absolute; top: 15px; right: 15px; border: none; background: transparent; font-size: 20px; cursor: pointer; color: #64748b;">✕</button>
+            <button onclick="document.getElementById('efTenantProfileModal').style.display='none'; document.body.classList.remove('ef-no-scroll');" style="position: absolute; top: 15px; right: 15px; border: none; background: transparent; font-size: 20px; cursor: pointer; color: #64748b;">✕</button>
             <div id="efWorkspaceDynamicScreen">
                 <div style="text-align:center; padding: 40px; color: #64748b;">Select a tenant to view profile.</div>
             </div>
         </div>
     </div>
-    <div id="efGlobalRightEditModal" class="ef-popup-modal-container" style="display:none;" onclick="if(event.target === this) this.style.display='none';">
-        <div class="ef-popup-modal-box">
+    <div id="efGlobalRightEditModal" class="ef-popup-modal-container" style="display:none;" onclick="if(event.target === this) { this.style.display='none'; document.body.classList.remove('ef-no-scroll'); }">
+        <div class="ef-popup-modal-box" style="position: relative;">
+            <button onclick="document.getElementById('efGlobalRightEditModal').style.display='none'; document.body.classList.remove('ef-no-scroll');" style="position: absolute; top: 15px; right: 15px; border: none; background: transparent; font-size: 20px; cursor: pointer; color: #64748b;">✕</button>
             <h3 style="margin-top:0;">Modify Tenant Profile</h3>
             <input type="hidden" id="modal_field_id">
             <div class="ef-form-group"><label>Name</label><input type="text" id="modal_field_name" class="ef-form-input-box"></div>
@@ -509,7 +548,7 @@ add_shortcode('tenant_profile', function() {
             <input type="hidden" id="modal_field_due_day">
             <div id="ef-modal-due-popup" class="ef-modal-due-popup"><div class="ef-due-grid"><?php for($i=1;$i<=31;$i++)echo "<button class='ef-due-box' data-day='$i'>$i</button>"; ?></div></div>
             <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:10px;">
-                <button onclick="document.getElementById('efGlobalRightEditModal').style.display='none'" class="ef-btn-action">Cancel</button>
+                <button onclick="document.getElementById('efGlobalRightEditModal').style.display='none'; document.body.classList.remove('ef-no-scroll');" class="ef-btn-action">Cancel</button>
                 <button onclick="efSubmitModalFormEdits()" id="efModalActionBtn" class="ef-btn-action">Save changes</button>
             </div>
         </div>
@@ -582,6 +621,7 @@ add_shortcode('tenant_profile', function() {
             const modal = document.getElementById('efTenantProfileModal');
             if (window.innerWidth <= 768) {
                 modal.style.display = 'flex';
+                document.body.classList.add('ef-no-scroll');
             }
             screen.innerHTML = '<div style="text-align:center; padding:40px;">Loading profile...</div>';
             const fd = new FormData(); fd.append('action', 'eftm_render_tenant_profile'); fd.append('tenant_id', e.detail.id);
@@ -623,6 +663,7 @@ add_shortcode('tenant_profile', function() {
             document.getElementById('modal_field_due_day_display').value = d.due;
             loadEditProps(d.propertyId);
             document.getElementById('efGlobalRightEditModal').style.display = 'flex';
+            document.body.classList.add('ef-no-scroll');
         }
         function loadEditProps(sel){
             const s = document.getElementById('modal_field_property'); s.innerHTML='<option>Loading...</option>';
@@ -672,7 +713,7 @@ add_shortcode('tenant_profile', function() {
             fd.append('new_email', document.getElementById('modal_field_email').value); fd.append('new_phone', document.getElementById('modal_field_phone').value);
             fd.append('new_start', document.getElementById('modal_field_start').value); fd.append('new_end', document.getElementById('modal_field_end').value);
             fd.append('new_due_day', document.getElementById('modal_field_due_day').value);
-            fetch(ajax, {method:'POST', body:fd}).then(r=>r.json()).then(res=>{ if(res.success){ alert('Saved!'); location.reload(); } });
+            fetch(ajax, {method:'POST', body:fd}).then(r=>r.json()).then(res=>{ if(res.success){ alert('Saved!'); document.body.classList.remove('ef-no-scroll'); location.reload(); } });
         }
         window.efLiveDeleteTenant = function(id, name) {
             if (confirm(`Delete ${name}?`)) {

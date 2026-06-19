@@ -18,12 +18,32 @@ add_shortcode('ef_log_payment_btn', function() {
         Log payment   
     </button>   
    
-    <div id="efLogPaymentGlobalModal" class="ef-modal-backdrop-blur" onclick="if(event.target == this) this.style.display='none';">   
-        <div class="ef-modal-window-surface">   
+    <style>
+        .ef-modal-backdrop-blur {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            overflow-y: auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        body.ef-no-scroll {
+            overflow: hidden !important;
+        }
+    </style>
+    <div id="efLogPaymentGlobalModal" class="ef-modal-backdrop-blur" onclick="if(event.target == this) { this.style.display='none'; document.body.classList.remove('ef-no-scroll'); }">
+        <div class="ef-modal-window-surface" style="position: relative;">
    
             <div class="ef-modal-window-header">   
                 <h3 id="efModalTitle">Log a payment</h3>   
-                <button class="ef-modal-close-x" onclick="document.getElementById('efLogPaymentGlobalModal').style.display='none';">✕</button>   
+                <button class="ef-modal-close-x" onclick="document.getElementById('efLogPaymentGlobalModal').style.display='none'; document.body.classList.remove('ef-no-scroll');">✕</button>
             </div>   
    
             <div class="ef-modal-input-field-group">   
@@ -78,7 +98,7 @@ add_shortcode('ef_log_payment_btn', function() {
             <input type="hidden" id="ef_payment_nonce" value="<?php echo wp_create_nonce('ef_payment_nonce'); ?>">
    
             <div class="ef-modal-action-footer-cluster">   
-                <button class="ef-btn-modal-base ef-btn-modal-cancel" onclick="document.getElementById('efLogPaymentGlobalModal').style.display='none';">Cancel</button>   
+                <button class="ef-btn-modal-base ef-btn-modal-cancel" onclick="document.getElementById('efLogPaymentGlobalModal').style.display='none'; document.body.classList.remove('ef-no-scroll');">Cancel</button>
                 <button id="efSubmitBtn" class="ef-btn-modal-base ef-btn-modal-submit" onclick="efSubmitNewPaymentRecord()">Log payment</button>   
             </div>   
    
@@ -96,6 +116,7 @@ add_shortcode('ef_log_payment_btn', function() {
         document.getElementById('ef_log_period').value = '<?php echo date('Y-m'); ?>'; 
         document.getElementById('ef_log_date').value = '<?php echo date('Y-m-d'); ?>'; 
         document.getElementById('efLogPaymentGlobalModal').style.display = 'flex'; 
+        document.body.classList.add('ef-no-scroll');
     } 
  
     function efSubmitNewPaymentRecord() {   
@@ -126,6 +147,7 @@ add_shortcode('ef_log_payment_btn', function() {
         .then(res => {   
             if(res.success) {   
                 document.getElementById('efLogPaymentGlobalModal').style.display = 'none';   
+                document.body.classList.remove('ef-no-scroll');
    
                 window.dispatchEvent(new CustomEvent('ef_global_tenant_updated', {    
                     detail: { id: tenant }    
@@ -592,6 +614,7 @@ function efEditTransaction(id) {
     document.getElementById('ef_log_date').value = entry.raw_date; 
  
     document.getElementById('efLogPaymentGlobalModal').style.display = 'flex'; 
+    document.body.classList.add('ef-no-scroll');
 } 
  
 function efDeleteTransaction(id) { 
