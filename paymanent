@@ -1,3 +1,4 @@
+<?php
 
 add_shortcode('ef_log_payment_btn', function() {   
     $tenants_query = new WP_Query([   
@@ -104,8 +105,8 @@ add_shortcode('ef_log_payment_btn', function() {
         const date = document.getElementById('ef_log_date').value;   
         const period = document.getElementById('ef_log_period').value;   
    
-        if(!tenant || !amount || !date) {   
-            alert('Please select a tenant and enter the payment parameters.');   
+        if(!tenant || !amount || !date || !period) {
+            alert('Please select a tenant and enter all payment parameters (including period).');
             return;   
         }   
    
@@ -143,7 +144,7 @@ add_shortcode('ef_log_payment_btn', function() {
 add_action('wp_ajax_ef_action_create_payment_record', 'ef_callback_ajax_create_payment');   
 function ef_callback_ajax_create_payment() {   
     check_ajax_referer('ef_payment_nonce', 'nonce');
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'Unauthorized.']);
     }
 
@@ -151,25 +152,36 @@ function ef_callback_ajax_create_payment() {
     $amount     = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;   
     $method     = isset($_POST['method']) ? sanitize_text_field($_POST['method']) : 'Bank Transfer';   
     $date       = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';   
+    $period     = isset($_POST['period']) ? sanitize_text_field($_POST['period']) : ''; // YYYY-MM
    
-    if (!$tenant_id || !$amount || !$date) {   
+    if (!$tenant_id || !$amount || !$date || !$period) {
         wp_send_json_error(['message' => 'Operational parameters data validation failure.']);   
     }   
    
     $tenant_name = get_the_title($tenant_id);   
     $post_title  = $tenant_name . ' - ' . date('M Y', strtotime($date));   
+    $post_date   = $period . '-01 00:00:00';
    
     $new_payment_id = wp_insert_post([   
         'post_title'  => $post_title,   
         'post_type'   => 'payment',    
-        'post_status' => 'publish'   
+        'post_status' => 'publish',
+        'post_date'   => $post_date,
+        'post_date_gmt' => get_gmt_from_date($post_date)
     ]);   
    
     if($new_payment_id && !is_wp_error($new_payment_id)) {   
-        update_field('associated_tenant', $tenant_id, $new_payment_id);    
-        update_field('amount_paid', $amount, $new_payment_id);             
-        update_field('date_of_payment', $date, $new_payment_id);   
-        update_field('mode_of_payment', $method, $new_payment_id);   
+        $meta = [
+            'associated_tenant' => $tenant_id,
+            'amount_paid'       => $amount,
+            'date_of_payment'   => $date,
+            'mode_of_payment'   => $method,
+            'payment_period'    => $period
+        ];
+        foreach ($meta as $k => $v) {
+            if (function_exists('update_field')) update_field($k, $v, $new_payment_id);
+            else update_post_meta($new_payment_id, $k, $v);
+        }
    
         wp_send_json_success(['payment_id' => $new_payment_id]);   
     }   
@@ -180,7 +192,7 @@ function ef_callback_ajax_create_payment() {
 add_action('wp_ajax_ef_action_update_payment_record', 'ef_callback_ajax_update_payment'); 
 function ef_callback_ajax_update_payment() { 
     check_ajax_referer('ef_payment_nonce', 'nonce');
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'Unauthorized.']);
     }
 
@@ -189,24 +201,35 @@ function ef_callback_ajax_update_payment() {
     $amount     = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;   
     $method     = isset($_POST['method']) ? sanitize_text_field($_POST['method']) : 'Bank Transfer';   
     $date       = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';   
+    $period     = isset($_POST['period']) ? sanitize_text_field($_POST['period']) : ''; // YYYY-MM
    
-    if (!$payment_id || !$tenant_id || !$amount || !$date) {   
+    if (!$payment_id || !$tenant_id || !$amount || !$date || !$period) {
         wp_send_json_error(['message' => 'Operational parameters data validation failure.']);   
     }   
    
     $tenant_name = get_the_title($tenant_id);   
     $post_title  = $tenant_name . ' - ' . date('M Y', strtotime($date));   
+    $post_date   = $period . '-01 00:00:00';
    
     $updated_payment_id = wp_update_post([ 
         'ID'          => $payment_id, 
         'post_title'  => $post_title, 
+        'post_date'   => $post_date,
+        'post_date_gmt' => get_gmt_from_date($post_date)
     ]); 
    
     if($updated_payment_id && !is_wp_error($updated_payment_id)) {   
-        update_field('associated_tenant', $tenant_id, $payment_id);    
-        update_field('amount_paid', $amount, $payment_id);             
-        update_field('date_of_payment', $date, $payment_id);   
-        update_field('mode_of_payment', $method, $payment_id);   
+        $meta = [
+            'associated_tenant' => $tenant_id,
+            'amount_paid'       => $amount,
+            'date_of_payment'   => $date,
+            'mode_of_payment'   => $method,
+            'payment_period'    => $period
+        ];
+        foreach ($meta as $k => $v) {
+            if (function_exists('update_field')) update_field($k, $v, $payment_id);
+            else update_post_meta($payment_id, $k, $v);
+        }
    
         wp_send_json_success(['payment_id' => $payment_id]);   
     }   
@@ -216,6 +239,10 @@ function ef_callback_ajax_update_payment() {
  
 add_action('wp_ajax_ef_action_delete_payment_record', 'ef_callback_ajax_delete_payment'); 
 function ef_callback_ajax_delete_payment() { 
+    check_ajax_referer('ef_payment_nonce', 'nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'Unauthorized.']);
+    }
     $payment_id = isset($_POST['payment_id']) ? intval($_POST['payment_id']) : 0; 
     if (!$payment_id) { 
         wp_send_json_error(['message' => 'Invalid payment ID.']); 
@@ -327,10 +354,10 @@ if ($query->have_posts()) {
         $query->the_post();     
         $payment_id = get_the_ID();     
    
-        $tenant_id  = get_field('associated_tenant', $payment_id);     
-        $amount     = get_field('amount_paid', $payment_id);     
-        $raw_date   = get_field('date_of_payment', $payment_id);     
-        $method     = get_field('mode_of_payment', $payment_id);     
+        $tenant_id  = get_field('associated_tenant', $payment_id) ?: get_post_meta($payment_id, 'associated_tenant', true);
+        $amount     = get_field('amount_paid', $payment_id) ?: get_post_meta($payment_id, 'amount_paid', true);
+        $raw_date   = get_field('date_of_payment', $payment_id) ?: get_post_meta($payment_id, 'date_of_payment', true);
+        $method     = get_field('mode_of_payment', $payment_id) ?: get_post_meta($payment_id, 'mode_of_payment', true);
    
         $amount_val   = $amount ? floatval($amount) : 0.00;     
         $method_txt   = $method ? $method : 'Bank Transfer';     
@@ -343,7 +370,7 @@ if ($query->have_posts()) {
             } 
         } 
    
-        $property_name = $tenant_id ? get_field('property_unit_name', $tenant_id) : '';     
+        $property_name = $tenant_id ? (get_field('property_unit_name', $tenant_id) ?: get_post_meta($tenant_id, 'property_unit_name', true)) : '';
         if (!$property_name) {     
             $property_name = 'Lakeside Residences';      
         }     

@@ -1,3 +1,4 @@
+<?php
 
 add_shortcode('ef_dashboard_actions', function() { 
     $current_year = date('Y'); 
@@ -109,7 +110,7 @@ add_shortcode('monthly_breakdown', function() {
         while ($t_query->have_posts()) { 
             $t_query->the_post(); 
             $t_id = get_the_ID(); 
-            $rent_val = get_field('monthly_rent', $t_id); 
+            $rent_val = get_field('monthly_rent', $t_id) ?: get_post_meta($t_id, 'monthly_rent', true);
             if ($rent_val) { 
                 $monthly_rent_expected += floatval($rent_val); 
             } 
@@ -155,7 +156,8 @@ add_shortcode('monthly_breakdown', function() {
         if ($p_query->have_posts()) { 
             while ($p_query->have_posts()) { 
                 $p_query->the_post(); 
-                $pay_val = get_field('amount_paid', get_the_ID()); 
+                $pay_id = get_the_ID();
+                $pay_val = get_field('amount_paid', $pay_id) ?: get_post_meta($pay_id, 'amount_paid', true);
                 if ($pay_val) { 
                     $revenue_collected += floatval($pay_val); 
                 } 

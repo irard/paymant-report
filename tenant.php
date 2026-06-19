@@ -123,15 +123,15 @@ function eftm_handle_ajax_tenant_breakdown() {
     $tenant_id = isset($_POST['tenant_id']) ? intval($_POST['tenant_id']) : 0;
     if (!$tenant_id) wp_die();
     $tenant_name    = get_the_title($tenant_id);
-    $monthly_rent   = floatval(get_field('monthly_rent', $tenant_id));
-    $due_day        = get_field('rent_due_day', $tenant_id);
-    $email          = get_field('tenant_email', $tenant_id);
-    $phone          = get_field('tenant_phone', $tenant_id);
-    $address        = get_field('tenant_address', $tenant_id);
-    $contract_start = get_field('tenant_start', $tenant_id);
-    $contract_end   = get_field('tenant_end', $tenant_id);
-    $unit           = get_field('tenant_unit', $tenant_id);
-    $prop_field     = get_field('property_id', $tenant_id);
+    $monthly_rent   = floatval(get_field('monthly_rent', $tenant_id) ?: get_post_meta($tenant_id, 'monthly_rent', true));
+    $due_day        = get_field('rent_due_day', $tenant_id) ?: get_post_meta($tenant_id, 'rent_due_day', true);
+    $email          = get_field('tenant_email', $tenant_id) ?: get_post_meta($tenant_id, 'tenant_email', true);
+    $phone          = get_field('tenant_phone', $tenant_id) ?: get_post_meta($tenant_id, 'tenant_phone', true);
+    $address        = get_field('tenant_address', $tenant_id) ?: get_post_meta($tenant_id, 'tenant_address', true);
+    $contract_start = get_field('tenant_start', $tenant_id) ?: get_post_meta($tenant_id, 'tenant_start', true);
+    $contract_end   = get_field('tenant_end', $tenant_id) ?: get_post_meta($tenant_id, 'tenant_end', true);
+    $unit           = get_field('tenant_unit', $tenant_id) ?: get_post_meta($tenant_id, 'tenant_unit', true);
+    $prop_field     = get_field('property_id', $tenant_id) ?: get_post_meta($tenant_id, 'property_id', true);
     $propId = is_object($prop_field) ? $prop_field->ID : (is_array($prop_field) ? ($prop_field['ID'] ?? $prop_field[0]->ID ?? 0) : intval($prop_field));
     $property_display = $propId ? get_the_title($propId) : 'No Property Assigned';
     $payment_history = [];
@@ -144,12 +144,12 @@ function eftm_handle_ajax_tenant_breakdown() {
         while ($p_query->have_posts()) {
             $p_query->the_post();
             $pay_id = get_the_ID();
-            $raw_date = get_field('date_of_payment', $pay_id);
+            $raw_date = get_field('date_of_payment', $pay_id) ?: get_post_meta($pay_id, 'date_of_payment', true);
             $ts = $raw_date ? strtotime($raw_date) : get_the_date('U', $pay_id);
             $payment_history[] = [
                 'id' => $pay_id, 'period' => date('Y-m', $ts), 'date' => date('n/j/Y', $ts),
-                'method' => get_field('mode_of_payment', $pay_id) ?: 'Cash',
-                'amount' => floatval(get_field('amount_paid', $pay_id))
+                'method' => (get_field('mode_of_payment', $pay_id) ?: get_post_meta($pay_id, 'mode_of_payment', true)) ?: 'Cash',
+                'amount' => floatval(get_field('amount_paid', $pay_id) ?: get_post_meta($pay_id, 'amount_paid', true))
             ];
         }
         wp_reset_postdata();
@@ -389,11 +389,12 @@ add_shortcode('tenant_list', function() {
         <input type="text" class="ef-search-box" placeholder="Search tenants..." id="efTenantSearch">
         <div id="efTenantListWrapper">
             <?php if ($q->have_posts()) : $count=0; $current_month=date('m'); $current_year=date('Y'); while ($q->have_posts()) : $q->the_post();
-                $tid=get_the_ID(); $rent=get_field('monthly_rent', $tid); $name=get_the_title();
-                $pid=get_field('property_id', $tid); $addr=$pid?(get_field('add_address',$pid)?:get_post_meta($pid,'add_address',true)?:get_the_title($pid)):'No Address';
+                $tid=get_the_ID(); $rent=get_field('monthly_rent', $tid) ?: get_post_meta($tid, 'monthly_rent', true); $name=get_the_title();
+                $pid=get_field('property_id', $tid) ?: get_post_meta($tid, 'property_id', true);
+                $addr=$pid?(get_field('add_address',$pid)?:get_post_meta($pid,'add_address',true)?:get_the_title($pid)):'No Address';
                 $paid_this_month = 0.00;
                 $p_query = new WP_Query(['post_type'=>$payment_post_type,'post_status'=>'publish','posts_per_page'=>-1,'date_query'=>[['year'=>$current_year,'month'=>$current_month]],'meta_query'=>[['key'=>$tenant_meta_key,'value'=>$tid,'compare'=>'=']]]);
-                if($p_query->have_posts()){ while($p_query->have_posts()){$p_query->the_post();$paid_this_month+=floatval(get_field('amount_paid',get_the_ID()));}wp_reset_postdata();}
+                if($p_query->have_posts()){ while($p_query->have_posts()){$p_query->the_post(); $p_id = get_the_ID(); $paid_this_month+=floatval(get_field('amount_paid',$p_id) ?: get_post_meta($p_id, 'amount_paid', true));}wp_reset_postdata();}
                 $initials=''; $words=explode(' ', $name); foreach($words as $w) $initials.=strtoupper(substr($w,0,1));
             ?>
                 <div class="ef-tenant-card-item" data-id="<?php echo $tid; ?>" id="tenant-row-<?php echo $tid; ?>" onclick="efDispatchGlobalView(<?php echo $tid; ?>)">
