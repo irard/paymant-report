@@ -1,5 +1,6 @@
 <?php
 if ( ! defined( "ABSPATH" ) ) exit;
+
 add_shortcode('add_tenant', function(){
     if (!is_user_logged_in()) return '';
     ob_start(); ?>
@@ -99,6 +100,7 @@ add_shortcode('add_tenant', function(){
     </script>
     <?php return ob_get_clean();
 });
+
 add_shortcode('tenant_header', function() {
     $q = new WP_Query(['post_type'=>'ef_tenant', 'post_status'=>'publish', 'posts_per_page'=>-1]);
     $count = $q->found_posts;
@@ -107,7 +109,8 @@ add_shortcode('tenant_header', function() {
             <div style="font-size:15px; color:#64748b; font-weight:500;">' . $count . ' active tenants</div>
         </div>';
 });
-$tenant_list_func = function() {
+
+$tenant_list_logic = function() {
     $payment_post_type = 'payment'; $tenant_meta_key = 'associated_tenant';
     $paged = max(1, get_query_var('paged'), (isset($_GET['paged']) ? intval($_GET['paged']) : 1));
     $q = new WP_Query(['post_type'=>'ef_tenant', 'post_status'=>'publish', 'posts_per_page'=>5, 'paged' => $paged, 'order'=>'ASC']);
@@ -162,9 +165,8 @@ $tenant_list_func = function() {
     </script>
     <?php return ob_get_clean();
 };
-add_shortcode('tenant_list', $tenant_list_func);
-add_shortcode('student_list', $tenant_list_func);
-add_shortcode('properties_page_grid', $tenant_list_func);
+add_shortcode('tenant_list', $tenant_list_logic);
+add_shortcode('student_list', $tenant_list_logic);
 
 add_shortcode('tenant_profile', function() {
     ob_start(); ?>
@@ -248,16 +250,10 @@ add_shortcode('tenant_profile', function() {
             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
         }
         @media (max-width: 768px) {
-            .atc-panel {
-                height: 60%;
-                overflow-y: auto;
+            .atc-panel, .ef-popup-modal-box {
+                height: 60% !important;
+                overflow-y: auto !important;
             }
-            .ef-popup-modal-box {
-                height: 60%;
-                overflow-y: auto;
-            }
-        }
-        @media (min-width: 280px) and (max-width: 769px) {
             .atc-row.contract {
                 display: block;
             }
@@ -265,6 +261,7 @@ add_shortcode('tenant_profile', function() {
                 display: block;
             }
         }
+        /* Pagination Styling */
         .properties-dashboard-nav {
             display: flex;
             justify-content: center;
@@ -508,6 +505,7 @@ add_shortcode('tenant_profile', function() {
     </script>
     <?php return ob_get_clean();
 });
+
 add_shortcode('tenant_manager', function(){
     return '<div style="font-family:system-ui, sans-serif;">' .
            do_shortcode('[tenant_header]') .
@@ -517,17 +515,12 @@ add_shortcode('tenant_manager', function(){
            '</div></div>';
 });
 
-
-
 add_action('wp_ajax_eftm_create_tenant', 'eftm_handle_create_tenant');
 add_action('wp_ajax_eftm_check_property_availability', 'eftm_handle_check_property_availability');
 add_action('wp_ajax_eftm_render_tenant_profile', 'eftm_handle_ajax_tenant_breakdown');
-add_action('wp_ajax_nopriv_eftm_render_tenant_profile', 'eftm_handle_ajax_tenant_breakdown');
 add_action('wp_ajax_eftm_edit_tenant', 'eftm_execute_ajax_tenant_modification');
 add_action('wp_ajax_eftm_delete_tenant', 'eftm_execute_ajax_tenant_deletion');
 add_action('wp_ajax_eftm_get_properties', 'eftm_global_execute_properties_fetch');
-
-
 
 if ( ! function_exists('eftm_get_total_units') ) {
     function eftm_get_total_units($property_id) {
@@ -576,8 +569,6 @@ if ( ! function_exists('eftm_get_occupied_count') ) {
     }
 }
 
-
-
 function eftm_handle_create_tenant() {
     if ( ! isset($_POST['create_tenant_nonce']) || ! wp_verify_nonce($_POST['create_tenant_nonce'], 'create_tenant_action') ) {
         wp_send_json_error('Invalid request (nonce).', 403);
@@ -614,6 +605,7 @@ function eftm_handle_create_tenant() {
     }
     wp_send_json_success(['id' => $tenant_id]);
 }
+
 function eftm_handle_check_property_availability() {
     if (!isset($_POST['security']) || !wp_verify_nonce($_POST['security'], 'property_availability_nonce')) {
         wp_send_json_error('Invalid security check.', 403);
@@ -635,7 +627,11 @@ function eftm_handle_check_property_availability() {
         'next_available_unit' => $occupied_count + 1,
     ]);
 }
+
 function eftm_handle_ajax_tenant_breakdown() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error('Unauthorized.', 403);
+    }
     $tenant_id = isset($_POST['tenant_id']) ? intval($_POST['tenant_id']) : 0;
     if (!$tenant_id) wp_die();
     $tenant_name    = get_the_title($tenant_id);
@@ -732,6 +728,7 @@ function eftm_handle_ajax_tenant_breakdown() {
     <?php
     wp_die();
 }
+
 function eftm_execute_ajax_tenant_modification() {
     if (!isset($_POST['security']) || !wp_verify_nonce($_POST['security'], 'edit_tenant_nonce')) {
         wp_send_json_error('Invalid security check.', 403);
@@ -760,6 +757,7 @@ function eftm_execute_ajax_tenant_modification() {
     }
     wp_send_json_success();
 }
+
 function eftm_execute_ajax_tenant_deletion() {
     if (!isset($_POST['security']) || !wp_verify_nonce($_POST['security'], 'delete_tenant_nonce')) {
         wp_send_json_error('Invalid security check.', 403);
@@ -771,6 +769,7 @@ function eftm_execute_ajax_tenant_deletion() {
     if ($tid && wp_delete_post($tid, true)) wp_send_json_success();
     else wp_send_json_error('Delete failed.');
 }
+
 function eftm_global_execute_properties_fetch() {
     if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.', 403);
