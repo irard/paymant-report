@@ -167,6 +167,7 @@ $tenant_list_logic = function() {
 };
 add_shortcode('tenant_list', $tenant_list_logic);
 add_shortcode('student_list', $tenant_list_logic);
+add_shortcode('properties_page_grid', $tenant_list_logic);
 
 add_shortcode('tenant_profile', function() {
     ob_start(); ?>
@@ -296,9 +297,9 @@ add_shortcode('tenant_profile', function() {
             font-weight: 500;
         }
     </style>
-    <div id="efTenantProfileModal" class="ef-popup-modal-container" style="display:none;" onclick="if(event.target === this) { this.style.display='none'; document.body.classList.remove('ef-no-scroll'); }">
+    <div id="efTenantProfileModal" class="ef-popup-modal-container" style="display:none;" onclick="if(event.target === this) { this.style.display='none'; efToggleScrollLock(); }">
         <div class="ef-popup-modal-box" style="max-width: 800px; width: 90%; position: relative;">
-            <button onclick="document.getElementById('efTenantProfileModal').style.display='none'; document.body.classList.remove('ef-no-scroll');" style="position: absolute; top: 15px; right: 15px; border: none; background: transparent; font-size: 20px; cursor: pointer; color: #64748b;">✕</button>
+            <button onclick="document.getElementById('efTenantProfileModal').style.display='none'; efToggleScrollLock();" style="position: absolute; top: 15px; right: 15px; border: none; background: transparent; font-size: 20px; cursor: pointer; color: #64748b;">✕</button>
             <div id="efWorkspaceDynamicScreen">
                 <div style="text-align:center; padding: 40px; color: #64748b;">Select a tenant to view profile.</div>
             </div>
@@ -537,6 +538,7 @@ add_shortcode('tenant_manager', function(){
 add_action('wp_ajax_eftm_create_tenant', 'eftm_handle_create_tenant');
 add_action('wp_ajax_eftm_check_property_availability', 'eftm_handle_check_property_availability');
 add_action('wp_ajax_eftm_render_tenant_profile', 'eftm_handle_ajax_tenant_breakdown');
+add_action('wp_ajax_nopriv_eftm_render_tenant_profile', 'eftm_handle_ajax_tenant_breakdown');
 add_action('wp_ajax_eftm_edit_tenant', 'eftm_execute_ajax_tenant_modification');
 add_action('wp_ajax_eftm_delete_tenant', 'eftm_execute_ajax_tenant_deletion');
 add_action('wp_ajax_eftm_get_properties', 'eftm_global_execute_properties_fetch');
@@ -648,9 +650,6 @@ function eftm_handle_check_property_availability() {
 }
 
 function eftm_handle_ajax_tenant_breakdown() {
-    if (!is_user_logged_in()) {
-        wp_send_json_error('Unauthorized.', 403);
-    }
     $tenant_id = isset($_POST['tenant_id']) ? intval($_POST['tenant_id']) : 0;
     if (!$tenant_id) wp_die();
     $tenant_name    = get_the_title($tenant_id);
@@ -813,3 +812,4 @@ function eftm_global_execute_properties_fetch() {
     }
     wp_send_json_success($res);
 }
+add_action('wp_ajax_nopriv_eftm_render_tenant_profile', 'eftm_handle_ajax_tenant_breakdown');
