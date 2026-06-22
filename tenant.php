@@ -304,9 +304,9 @@ add_shortcode('tenant_profile', function() {
             </div>
         </div>
     </div>
-    <div id="efGlobalRightEditModal" class="ef-popup-modal-container" style="display:none;" onclick="if(event.target === this) { this.style.display='none'; document.body.classList.remove('ef-no-scroll'); }">
+    <div id="efGlobalRightEditModal" class="ef-popup-modal-container" style="display:none;" onclick="if(event.target === this) { efCloseEditModal(); }">
         <div class="ef-popup-modal-box" style="position: relative;">
-            <button onclick="document.getElementById('efGlobalRightEditModal').style.display='none'; document.body.classList.remove('ef-no-scroll');" style="position: absolute; top: 15px; right: 15px; border: none; background: transparent; font-size: 20px; cursor: pointer; color: #64748b;">✕</button>
+            <button onclick="efCloseEditModal()" style="position: absolute; top: 15px; right: 15px; border: none; background: transparent; font-size: 20px; cursor: pointer; color: #64748b;">✕</button>
             <h3 style="margin-top:0;">Modify Tenant Profile</h3>
             <input type="hidden" id="modal_field_id">
             <div class="ef-form-group"><label>Name</label><input type="text" id="modal_field_name" class="ef-form-input-box"></div>
@@ -328,7 +328,7 @@ add_shortcode('tenant_profile', function() {
             <input type="hidden" id="modal_field_due">
             <div id="ef-modal-due-popup" class="ef-modal-due-popup"><div class="ef-due-grid"><?php for($i=1;$i<=31;$i++)echo "<button class='ef-due-box' data-day='$i'>$i</button>"; ?></div></div>
             <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:10px;">
-                <button onclick="document.getElementById('efGlobalRightEditModal').style.display='none'; document.body.classList.remove('ef-no-scroll');" class="ef-btn-action">Cancel</button>
+                <button onclick="efCloseEditModal()" class="ef-btn-action">Cancel</button>
                 <button onclick="efSubmitModalFormEdits()" id="efModalActionBtn" class="ef-btn-action">Save changes</button>
             </div>
         </div>
@@ -396,12 +396,30 @@ add_shortcode('tenant_profile', function() {
     <script>
     (function(){
         const ajax = '<?php echo admin_url('admin-ajax.php'); ?>';
+
+        window.efToggleScrollLock = function() {
+            const profileVisible = document.getElementById('efTenantProfileModal').style.display === 'flex';
+            const editVisible = document.getElementById('efGlobalRightEditModal').style.display === 'flex';
+            const addVisible = document.getElementById('atc-modal') ? document.getElementById('atc-modal').style.display === 'flex' : false;
+
+            if (profileVisible || editVisible || addVisible) {
+                document.body.classList.add('ef-no-scroll');
+            } else {
+                document.body.classList.remove('ef-no-scroll');
+            }
+        };
+
+        window.efCloseEditModal = function() {
+            document.getElementById('efGlobalRightEditModal').style.display = 'none';
+            efToggleScrollLock();
+        };
+
         window.addEventListener('ef_load_tenant', e => {
             const screen = document.getElementById('efWorkspaceDynamicScreen');
             const modal = document.getElementById('efTenantProfileModal');
             if (window.innerWidth <= 768) {
                 modal.style.display = 'flex';
-                document.body.classList.add('ef-no-scroll');
+                efToggleScrollLock();
             }
             screen.innerHTML = '<div style="text-align:center; padding:40px;">Loading profile...</div>';
             const fd = new FormData(); fd.append('action', 'eftm_render_tenant_profile'); fd.append('tenant_id', e.detail.id);
@@ -409,6 +427,7 @@ add_shortcode('tenant_profile', function() {
                 screen.innerHTML = html; attachReceiptEvents();
             });
         });
+
         window.attachReceiptEvents = function() {
             document.querySelectorAll('.ef-btn-receipt').forEach(btn => {
                 btn.onclick = () => {
@@ -443,7 +462,7 @@ add_shortcode('tenant_profile', function() {
             document.getElementById('modal_field_due_day_display').value = d.due;
             loadEditProps(d.propertyId);
             document.getElementById('efGlobalRightEditModal').style.display = 'flex';
-            document.body.classList.add('ef-no-scroll');
+            efToggleScrollLock();
         }
         function loadEditProps(sel){
             const s = document.getElementById('modal_field_property'); s.innerHTML='<option>Loading...</option>';
@@ -493,7 +512,7 @@ add_shortcode('tenant_profile', function() {
             fd.append('new_email', document.getElementById('modal_field_email').value); fd.append('new_phone', document.getElementById('modal_field_phone').value);
             fd.append('new_start', document.getElementById('modal_field_start').value); fd.append('new_end', document.getElementById('modal_field_end').value);
             fd.append('new_due_day', document.getElementById('modal_field_due').value);
-            fetch(ajax, {method:'POST', body:fd}).then(r=>r.json()).then(res=>{ if(res.success){ alert('Saved!'); document.body.classList.remove('ef-no-scroll'); location.reload(); } });
+            fetch(ajax, {method:'POST', body:fd}).then(r=>r.json()).then(res=>{ if(res.success){ alert('Saved!'); efCloseEditModal(); location.reload(); } });
         }
         window.efLiveDeleteTenant = function(id, name) {
             if (confirm(`Delete ${name}?`)) {
