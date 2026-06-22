@@ -173,8 +173,6 @@ add_shortcode('tenant_profile', function() {
                 padding: 0 !important;
                 margin: 0 !important;
                 background: none !important;
-                height: auto !important;
-                overflow: visible !important;
             }
             #efTenantProfileModal .ef-popup-modal-box > button {
                 display: none !important;
@@ -228,16 +226,22 @@ add_shortcode('tenant_profile', function() {
             max-width: 600px;
             width: 100%;
             position: relative;
-            height: 60%;
-            overflow-y: auto;
         }
         .ef-popup-modal-box {
             background: #fff;
             padding: 24px;
             border-radius: 12px;
             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            height: 60%;
-            overflow-y: auto;
+        }
+        @media (max-width: 768px) {
+            .atc-panel {
+                height: 60%;
+                overflow-y: auto;
+            }
+            .ef-popup-modal-box {
+                height: 60%;
+                overflow-y: auto;
+            }
         }
         @media (min-width: 280px) and (max-width: 769px) {
             .atc-row.contract {
