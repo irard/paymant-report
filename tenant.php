@@ -471,6 +471,7 @@ add_shortcode('tenant_manager', function(){
 add_action('wp_ajax_eftm_create_tenant', 'eftm_handle_create_tenant');
 add_action('wp_ajax_eftm_check_property_availability', 'eftm_handle_check_property_availability');
 add_action('wp_ajax_eftm_render_tenant_profile', 'eftm_handle_ajax_tenant_breakdown');
+add_action('wp_ajax_nopriv_eftm_render_tenant_profile', 'eftm_handle_ajax_tenant_breakdown');
 add_action('wp_ajax_eftm_edit_tenant', 'eftm_execute_ajax_tenant_modification');
 add_action('wp_ajax_eftm_delete_tenant', 'eftm_execute_ajax_tenant_deletion');
 add_action('wp_ajax_eftm_get_properties', 'eftm_global_execute_properties_fetch');
@@ -530,7 +531,7 @@ function eftm_handle_create_tenant() {
     if ( ! isset($_POST['create_tenant_nonce']) || ! wp_verify_nonce($_POST['create_tenant_nonce'], 'create_tenant_action') ) {
         wp_send_json_error('Invalid request (nonce).', 403);
     }
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.', 403);
     }
     $name   = sanitize_text_field($_POST['tenant_name'] ?? '');
@@ -566,7 +567,7 @@ function eftm_handle_check_property_availability() {
     if (!isset($_POST['security']) || !wp_verify_nonce($_POST['security'], 'property_availability_nonce')) {
         wp_send_json_error('Invalid security check.', 403);
     }
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.', 403);
     }
     $property_id = intval($_POST['property_id'] ?? 0);
@@ -584,9 +585,6 @@ function eftm_handle_check_property_availability() {
     ]);
 }
 function eftm_handle_ajax_tenant_breakdown() {
-    if (!current_user_can('edit_posts')) {
-        wp_die('Unauthorized');
-    }
     $tenant_id = isset($_POST['tenant_id']) ? intval($_POST['tenant_id']) : 0;
     if (!$tenant_id) wp_die();
     $tenant_name    = get_the_title($tenant_id);
@@ -687,7 +685,7 @@ function eftm_execute_ajax_tenant_modification() {
     if (!isset($_POST['security']) || !wp_verify_nonce($_POST['security'], 'edit_tenant_nonce')) {
         wp_send_json_error('Invalid security check.', 403);
     }
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.', 403);
     }
     $tid = intval($_POST['tenant_id'] ?? 0);
@@ -715,7 +713,7 @@ function eftm_execute_ajax_tenant_deletion() {
     if (!isset($_POST['security']) || !wp_verify_nonce($_POST['security'], 'delete_tenant_nonce')) {
         wp_send_json_error('Invalid security check.', 403);
     }
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.', 403);
     }
     $tid = intval($_POST['tenant_id'] ?? 0);
@@ -723,7 +721,7 @@ function eftm_execute_ajax_tenant_deletion() {
     else wp_send_json_error('Delete failed.');
 }
 function eftm_global_execute_properties_fetch() {
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.', 403);
     }
     $q = new WP_Query(['post_type' => 'property', 'post_status' => 'publish', 'posts_per_page' => -1, 'orderby' => 'title', 'order' => 'ASC']);
