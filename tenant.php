@@ -107,48 +107,44 @@ add_shortcode('tenant_header', function() {
             <div style="font-size:15px; color:#64748b; font-weight:500;">' . $count . ' active tenants</div>
         </div>';
 });
-add_shortcode('tenant_list', function() {
+$tenant_list_func = function() {
     $payment_post_type = 'payment'; $tenant_meta_key = 'associated_tenant';
     $paged = max(1, get_query_var('paged'), (isset($_GET['paged']) ? intval($_GET['paged']) : 1));
     $q = new WP_Query(['post_type'=>'ef_tenant', 'post_status'=>'publish', 'posts_per_page'=>5, 'paged' => $paged, 'order'=>'ASC']);
+    $total_pages = $q->max_num_pages;
     ob_start(); ?>
     <div class="ef-dashboard-sidebar-independent">
         <input type="text" class="ef-search-box" placeholder="Search tenants..." id="efTenantSearch">
-        <div id="efTenantListWrapper">
-            <?php if ($q->have_posts()) : $count=0; $current_month=date('m'); $current_year=date('Y'); while ($q->have_posts()) : $q->the_post();
-                $tid=get_the_ID(); $rent=get_field('monthly_rent', $tid) ?: get_post_meta($tid, 'monthly_rent', true); $name=get_the_title();
-                $pid=get_field('property_id', $tid) ?: get_post_meta($tid, 'property_id', true);
-                $addr=$pid?(get_field('add_address',$pid)?:get_post_meta($pid,'add_address',true)?:get_the_title($pid)):'No Address';
-                $paid_this_month = 0.00;
-                $p_query = new WP_Query(['post_type'=>$payment_post_type,'post_status'=>'publish','posts_per_page'=>-1,'date_query'=>[['year'=>$current_year,'month'=>$current_month]],'meta_query'=>[['key'=>$tenant_meta_key,'value'=>$tid,'compare'=>'=']]]);
-                if($p_query->have_posts()){ while($p_query->have_posts()){$p_query->the_post(); $p_id = get_the_ID(); $paid_this_month+=floatval(get_field('amount_paid',$p_id) ?: get_post_meta($p_id, 'amount_paid', true));}wp_reset_postdata();}
-                $initials=''; $words=explode(' ', $name); foreach($words as $w) $initials.=strtoupper(substr($w,0,1));
-            ?>
-                <div class="ef-tenant-card-item" data-id="<?php echo $tid; ?>" id="tenant-row-<?php echo $tid; ?>" onclick="efDispatchGlobalView(<?php echo $tid; ?>)">
-                    <div class="ef-tenant-meta"><div class="ef-avatar-circle"><?php echo substr($initials,0,2); ?></div>
-                        <div class="ef-tenant-info-text"><div class="ef-tenant-name"><?php echo esc_html($name); ?></div><div class="ef-tenant-location"><?php echo esc_html($addr); ?></div></div>
-                    </div>
-                    <div class="ef-tenant-right-aside"><div class="ef-tenant-rent-badge">AED <span class="tenant-list-rent"><?php echo number_format(floatval($rent)); ?></span><div style="font-size:10px; font-weight:400; color:#64748b; margin-top:-2px;">monthly</div></div>
-                        <?php if (floatval($rent) <= 0): ?><div style="font-size: 10px; color: #64748b; margin-top:4px;">No Rent Set</div>
-                        <?php elseif ($paid_this_month >= floatval($rent)): ?><div class="ef-payment-status-badge status-paid">Paid</div>
-                        <?php elseif ($paid_this_month > 0): ?><div class="ef-payment-status-badge status-partial">Partial</div>
-                        <?php else: ?><div class="ef-payment-status-badge status-unpaid">Unpaid</div><?php endif; ?>
-                    </div>
-                </div>
-            <?php $count++; endwhile; ?>
-            <div class="ef-pagination" style="margin-top: 20px; display: flex; gap: 8px;">
-                <?php
-                echo paginate_links([
-                    'base' => str_replace(999999999, '%#%', esc_url(add_query_arg('paged', 999999999))),
-                    'format' => '?paged=%#%',
-                    'current' => $paged,
-                    'total' => $q->max_num_pages,
-                    'prev_text' => '&laquo; Prev',
-                    'next_text' => 'Next &raquo;',
-                ]);
+        <div id="properties-dashboard-wrapper">
+            <div id="properties-dashboard-grid" class="properties-dashboard-grid">
+                <?php if ($q->have_posts()) : while ($q->have_posts()) : $q->the_post();
+                    $tid=get_the_ID(); $rent=get_field('monthly_rent', $tid) ?: get_post_meta($tid, 'monthly_rent', true); $name=get_the_title();
+                    $pid=get_field('property_id', $tid) ?: get_post_meta($tid, 'property_id', true);
+                    $addr=$pid?(get_field('add_address',$pid)?:get_post_meta($pid,'add_address',true)?:get_the_title($pid)):'No Address';
+                    $paid_this_month = 0.00;
+                    $current_month=date('m'); $current_year=date('Y');
+                    $p_query = new WP_Query(['post_type'=>$payment_post_type,'post_status'=>'publish','posts_per_page'=>-1,'date_query'=>[['year'=>$current_year,'month'=>$current_month]],'meta_query'=>[['key'=>$tenant_meta_key,'value'=>$tid,'compare'=>'=']]]);
+                    if($p_query->have_posts()){ while($p_query->have_posts()){$p_query->the_post(); $p_id = get_the_ID(); $paid_this_month+=floatval(get_field('amount_paid',$p_id) ?: get_post_meta($p_id, 'amount_paid', true));}wp_reset_postdata();}
+                    $initials=''; $words=explode(' ', $name); foreach($words as $w) $initials.=strtoupper(substr($w,0,1));
                 ?>
+                    <div class="ef-tenant-card-item" data-id="<?php echo $tid; ?>" id="tenant-row-<?php echo $tid; ?>" onclick="efDispatchGlobalView(<?php echo $tid; ?>)">
+                        <div class="ef-tenant-meta"><div class="ef-avatar-circle"><?php echo substr($initials,0,2); ?></div>
+                            <div class="ef-tenant-info-text"><div class="ef-tenant-name"><?php echo esc_html($name); ?></div><div class="ef-tenant-location"><?php echo esc_html($addr); ?></div></div>
+                        </div>
+                        <div class="ef-tenant-right-aside"><div class="ef-tenant-rent-badge">AED <span class="tenant-list-rent"><?php echo number_format(floatval($rent)); ?></span><div style="font-size:10px; font-weight:400; color:#64748b; margin-top:-2px;">monthly</div></div>
+                            <?php if (floatval($rent) <= 0): ?><div style="font-size: 10px; color: #64748b; margin-top:4px;">No Rent Set</div>
+                            <?php elseif ($paid_this_month >= floatval($rent)): ?><div class="ef-payment-status-badge status-paid">Paid</div>
+                            <?php elseif ($paid_this_month > 0): ?><div class="ef-payment-status-badge status-partial">Partial</div>
+                            <?php else: ?><div class="ef-payment-status-badge status-unpaid">Unpaid</div><?php endif; ?>
+                        </div>
+                    </div>
+                <?php endwhile; wp_reset_postdata(); endif; ?>
             </div>
-            <?php wp_reset_postdata(); endif; ?>
+            <div class="properties-dashboard-nav">
+                <button id="prev-page" class="prop-nav-btn" <?php echo ($paged <= 1) ? 'disabled' : ''; ?> onclick="window.location.href='<?php echo esc_url(add_query_arg('paged', $paged - 1)); ?>'">Previous</button>
+                <span id="page-info">Page <?php echo $paged; ?> of <?php echo $total_pages; ?></span>
+                <button id="next-page" class="prop-nav-btn" <?php echo ($paged >= $total_pages) ? 'disabled' : ''; ?> onclick="window.location.href='<?php echo esc_url(add_query_arg('paged', $paged + 1)); ?>'">Next</button>
+            </div>
         </div>
     </div>
     <script>
@@ -165,7 +161,11 @@ add_shortcode('tenant_list', function() {
     };
     </script>
     <?php return ob_get_clean();
-});
+};
+add_shortcode('tenant_list', $tenant_list_func);
+add_shortcode('student_list', $tenant_list_func);
+add_shortcode('properties_page_grid', $tenant_list_func);
+
 add_shortcode('tenant_profile', function() {
     ob_start(); ?>
     <style>
@@ -265,6 +265,39 @@ add_shortcode('tenant_profile', function() {
                 display: block;
             }
         }
+        .properties-dashboard-nav {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-top: 20px;
+            padding: 10px;
+        }
+        .prop-nav-btn {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            color: #64748b;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .prop-nav-btn:hover:not(:disabled) {
+            background: #f8fafc;
+            border-color: #cbd5e1;
+            color: #0f172a;
+        }
+        .prop-nav-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        #page-info {
+            color: #64748b;
+            font-size: 14px;
+            font-weight: 500;
+        }
     </style>
     <div id="efTenantProfileModal" class="ef-popup-modal-container" style="display:none;" onclick="if(event.target === this) { this.style.display='none'; document.body.classList.remove('ef-no-scroll'); }">
         <div class="ef-popup-modal-box" style="max-width: 800px; width: 90%; position: relative;">
@@ -295,7 +328,7 @@ add_shortcode('tenant_profile', function() {
                 <div class="ef-form-group"><label>End Date</label><input type="date" id="modal_field_end" class="ef-form-input-box"></div>
             </div>
             <div class="ef-form-group"><label>Due Day</label><input type="text" id="modal_field_due_day_display" class="ef-form-input-box" readonly></div>
-            <input type="hidden" id="modal_field_due_day">
+            <input type="hidden" id="modal_field_due">
             <div id="ef-modal-due-popup" class="ef-modal-due-popup"><div class="ef-due-grid"><?php for($i=1;$i<=31;$i++)echo "<button class='ef-due-box' data-day='$i'>$i</button>"; ?></div></div>
             <div style="display:flex; justify-content:flex-end; gap:12px; margin-top:10px;">
                 <button onclick="document.getElementById('efGlobalRightEditModal').style.display='none'; document.body.classList.remove('ef-no-scroll');" class="ef-btn-action">Cancel</button>
@@ -409,7 +442,7 @@ add_shortcode('tenant_profile', function() {
             document.getElementById('modal_field_phone').value = d.phone;
             document.getElementById('modal_field_start').value = d.start;
             document.getElementById('modal_field_end').value = d.end;
-            document.getElementById('modal_field_due_day').value = d.due;
+            document.getElementById('modal_field_due').value = d.due;
             document.getElementById('modal_field_due_day_display').value = d.due;
             loadEditProps(d.propertyId);
             document.getElementById('efGlobalRightEditModal').style.display = 'flex';
@@ -443,12 +476,12 @@ add_shortcode('tenant_profile', function() {
                         document.getElementById('modal_field_rent').value = opt.dataset.rent || 1000;
                         if(opt.dataset.start) document.getElementById('modal_field_start').value = new Date(opt.dataset.start).toISOString().split('T')[0];
                         if(opt.dataset.end) document.getElementById('modal_field_end').value = new Date(opt.dataset.end).toISOString().split('T')[0];
-                        if(opt.dataset.due){ document.getElementById('modal_field_due_day').value=opt.dataset.due; document.getElementById('modal_field_due_day_display').value=opt.dataset.due; }
+                        if(opt.dataset.due){ document.getElementById('modal_field_due').value=opt.dataset.due; document.getElementById('modal_field_due_day_display').value=opt.dataset.due; }
                     }
                 }
             });
         };
-        const mDueDisp=document.getElementById('modal_field_due_day_display'), mDuePop=document.getElementById('ef-modal-due-popup'), mDueInp=document.getElementById('modal_field_due_day');
+        const mDueDisp=document.getElementById('modal_field_due_day_display'), mDuePop=document.getElementById('ef-modal-due-popup'), mDueInp=document.getElementById('modal_field_due');
         mDueDisp.onclick=()=>mDuePop.style.display='flex';
         mDuePop.onclick=e=>{
           if(e.target.dataset.day){mDueInp.value=e.target.dataset.day; mDueDisp.value=e.target.dataset.day; mDuePop.style.display='none';}
@@ -462,7 +495,7 @@ add_shortcode('tenant_profile', function() {
             fd.append('new_rent', document.getElementById('modal_field_rent').value); fd.append('new_address', document.getElementById('modal_field_address').value);
             fd.append('new_email', document.getElementById('modal_field_email').value); fd.append('new_phone', document.getElementById('modal_field_phone').value);
             fd.append('new_start', document.getElementById('modal_field_start').value); fd.append('new_end', document.getElementById('modal_field_end').value);
-            fd.append('new_due_day', document.getElementById('modal_field_due_day').value);
+            fd.append('new_due_day', document.getElementById('modal_field_due').value);
             fetch(ajax, {method:'POST', body:fd}).then(r=>r.json()).then(res=>{ if(res.success){ alert('Saved!'); document.body.classList.remove('ef-no-scroll'); location.reload(); } });
         }
         window.efLiveDeleteTenant = function(id, name) {
