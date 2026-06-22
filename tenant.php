@@ -109,7 +109,8 @@ add_shortcode('tenant_header', function() {
 });
 add_shortcode('tenant_list', function() {
     $payment_post_type = 'payment'; $tenant_meta_key = 'associated_tenant';
-    $q = new WP_Query(['post_type'=>'ef_tenant', 'post_status'=>'publish', 'posts_per_page'=>-1, 'order'=>'ASC']);
+    $paged = max(1, get_query_var('paged'), (isset($_GET['paged']) ? intval($_GET['paged']) : 1));
+    $q = new WP_Query(['post_type'=>'ef_tenant', 'post_status'=>'publish', 'posts_per_page'=>5, 'paged' => $paged, 'order'=>'ASC']);
     ob_start(); ?>
     <div class="ef-dashboard-sidebar-independent">
         <input type="text" class="ef-search-box" placeholder="Search tenants..." id="efTenantSearch">
@@ -134,7 +135,20 @@ add_shortcode('tenant_list', function() {
                         <?php else: ?><div class="ef-payment-status-badge status-unpaid">Unpaid</div><?php endif; ?>
                     </div>
                 </div>
-            <?php $count++; endwhile; wp_reset_postdata(); endif; ?>
+            <?php $count++; endwhile; ?>
+            <div class="ef-pagination" style="margin-top: 20px; display: flex; gap: 8px;">
+                <?php
+                echo paginate_links([
+                    'base' => str_replace(999999999, '%#%', esc_url(add_query_arg('paged', 999999999))),
+                    'format' => '?paged=%#%',
+                    'current' => $paged,
+                    'total' => $q->max_num_pages,
+                    'prev_text' => '&laquo; Prev',
+                    'next_text' => 'Next &raquo;',
+                ]);
+                ?>
+            </div>
+            <?php wp_reset_postdata(); endif; ?>
         </div>
     </div>
     <script>
