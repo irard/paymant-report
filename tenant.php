@@ -692,7 +692,7 @@ add_action('wp_ajax_eftm_delete_tenant', 'eftm_execute_ajax_tenant_deletion');
 add_action('wp_ajax_eftm_get_properties', 'eftm_global_execute_properties_fetch');
 
 if ( ! function_exists('eftm_get_total_units') ) {
-    function eftm_get_total_units($property_id) {
+function eftm_get_total_units($property_id) {
         if (function_exists('get_field')) {
             $units = get_field('number_unit', $property_id);
             if (!$units) $units = get_field('property_units', $property_id);
@@ -704,7 +704,7 @@ if ( ! function_exists('eftm_get_total_units') ) {
     }
 }
 if ( ! function_exists('eftm_get_occupied_count') ) {
-    function eftm_get_occupied_count($property_id, $exclude_tenant_id = 0) {
+function eftm_get_occupied_count($property_id, $exclude_tenant_id = 0) {
         $args = [
             'post_type' => 'ef_tenant',
             'posts_per_page' => -1,
@@ -741,6 +741,7 @@ if ( ! function_exists('eftm_get_occupied_count') ) {
     }
 }
 
+if ( ! function_exists('eftm_handle_create_tenant') ) {
 function eftm_handle_create_tenant() {
     if ( ! isset($_POST['create_tenant_nonce']) || ! wp_verify_nonce($_POST['create_tenant_nonce'], 'create_tenant_action') ) {
         wp_send_json_error('Invalid request (nonce).', 403);
@@ -777,7 +778,9 @@ function eftm_handle_create_tenant() {
     }
     wp_send_json_success(['id' => $tenant_id]);
 }
+}
 
+if ( ! function_exists('eftm_handle_check_property_availability') ) {
 function eftm_handle_check_property_availability() {
     if (!isset($_POST['security']) || !wp_verify_nonce($_POST['security'], 'property_availability_nonce')) {
         wp_send_json_error('Invalid security check.', 403);
@@ -805,7 +808,9 @@ function eftm_handle_check_property_availability() {
         'next_available_unit' => $occupied_count + 1,
     ]);
 }
+}
 
+if ( ! function_exists('eftm_handle_ajax_tenant_breakdown') ) {
 function eftm_handle_ajax_tenant_breakdown() {
     if (!is_user_logged_in()) {
         wp_die('Unauthorized.');
@@ -929,7 +934,9 @@ function eftm_handle_ajax_tenant_breakdown() {
     <?php
     wp_die();
 }
+}
 
+if ( ! function_exists('eftm_execute_ajax_tenant_modification') ) {
 function eftm_execute_ajax_tenant_modification() {
     if (!isset($_POST['security']) || !wp_verify_nonce($_POST['security'], 'edit_tenant_nonce')) {
         wp_send_json_error('Invalid security check.', 403);
@@ -958,7 +965,9 @@ function eftm_execute_ajax_tenant_modification() {
     }
     wp_send_json_success();
 }
+}
 
+if ( ! function_exists('eftm_execute_ajax_tenant_deletion') ) {
 function eftm_execute_ajax_tenant_deletion() {
     if (!isset($_POST['security']) || !wp_verify_nonce($_POST['security'], 'delete_tenant_nonce')) {
         wp_send_json_error('Invalid security check.', 403);
@@ -970,7 +979,9 @@ function eftm_execute_ajax_tenant_deletion() {
     if ($tid && wp_delete_post($tid, true)) wp_send_json_success();
     else wp_send_json_error('Delete failed.');
 }
+}
 
+if ( ! function_exists('eftm_global_execute_properties_fetch') ) {
 function eftm_global_execute_properties_fetch() {
     if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.', 403);
@@ -1007,4 +1018,5 @@ function eftm_global_execute_properties_fetch() {
         wp_reset_postdata();
     }
     wp_send_json_success($res);
+}
 }

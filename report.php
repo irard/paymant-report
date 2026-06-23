@@ -1,3 +1,4 @@
+<?php
 
 add_shortcode('ef_dashboard_actions', function() { 
     $current_year = date('Y'); 

@@ -1,8 +1,9 @@
 <?php
 
-add_action('wp_ajax_save_property', 'handle_save_property');
+add_action('wp_ajax_save_property', 'ef_handle_save_property');
 
-function handle_save_property() {
+if (!function_exists('ef_handle_save_property')) {
+function ef_handle_save_property() {
     check_ajax_referer('ef_property_nonce', 'nonce');
     if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.');
@@ -75,10 +76,12 @@ function handle_save_property() {
 
     wp_send_json_success(['id' => $post_id]);
 }
+}
 
-add_action('wp_ajax_delete_property', 'handle_delete_property');
+add_action('wp_ajax_delete_property', 'ef_handle_delete_property');
 
-function handle_delete_property() {
+if (!function_exists('ef_handle_delete_property')) {
+function ef_handle_delete_property() {
     check_ajax_referer('ef_property_nonce', 'nonce');
     if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.');
@@ -96,9 +99,11 @@ function handle_delete_property() {
         wp_send_json_error('Failed to delete property.');
     }
 }
+}
 
-add_action('wp_ajax_get_properties_dashboard', 'handle_get_properties_dashboard');
-function handle_get_properties_dashboard() {
+add_action('wp_ajax_get_properties_dashboard', 'ef_handle_get_properties_dashboard');
+if (!function_exists('ef_handle_get_properties_dashboard')) {
+function ef_handle_get_properties_dashboard() {
     check_ajax_referer('ef_property_nonce', 'nonce');
     if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.');
@@ -212,9 +217,11 @@ function handle_get_properties_dashboard() {
     }
     wp_send_json_success($data);
 }
+}
 
-add_action('wp_ajax_get_property_tenants_simple', 'handle_get_property_tenants_simple');
-function handle_get_property_tenants_simple() {
+add_action('wp_ajax_get_property_tenants_simple', 'ef_handle_get_property_tenants_simple');
+if (!function_exists('ef_handle_get_property_tenants_simple')) {
+function ef_handle_get_property_tenants_simple() {
     check_ajax_referer('ef_property_nonce', 'nonce');
     if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.');
@@ -254,6 +261,7 @@ function handle_get_property_tenants_simple() {
         ];
     }
     wp_send_json_success($data);
+}
 }
 
 add_shortcode('properties_page_add_btn', function() {

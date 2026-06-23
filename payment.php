@@ -1,3 +1,4 @@
+<?php
 
 add_shortcode('ef_log_payment_btn', function() {   
     $tenants_query = new WP_Query([   
@@ -141,6 +142,7 @@ add_shortcode('ef_log_payment_btn', function() {
 });   
    
 add_action('wp_ajax_ef_action_create_payment_record', 'ef_callback_ajax_create_payment');   
+if (!function_exists('ef_callback_ajax_create_payment')) {
 function ef_callback_ajax_create_payment() {   
     check_ajax_referer('ef_payment_nonce', 'nonce');
     if (!is_user_logged_in()) {
@@ -176,8 +178,10 @@ function ef_callback_ajax_create_payment() {
    
     wp_send_json_error();   
 }   
+}
  
 add_action('wp_ajax_ef_action_update_payment_record', 'ef_callback_ajax_update_payment'); 
+if (!function_exists('ef_callback_ajax_update_payment')) {
 function ef_callback_ajax_update_payment() { 
     check_ajax_referer('ef_payment_nonce', 'nonce');
     if (!is_user_logged_in()) {
@@ -213,8 +217,10 @@ function ef_callback_ajax_update_payment() {
    
     wp_send_json_error();   
 } 
+}
  
 add_action('wp_ajax_ef_action_delete_payment_record', 'ef_callback_ajax_delete_payment'); 
+if (!function_exists('ef_callback_ajax_delete_payment')) {
 function ef_callback_ajax_delete_payment() { 
     $payment_id = isset($_POST['payment_id']) ? intval($_POST['payment_id']) : 0; 
     if (!$payment_id) { 
@@ -231,6 +237,7 @@ function ef_callback_ajax_delete_payment() {
         wp_send_json_error(['message' => 'Failed to delete transaction.']); 
     } 
 } 
+}
    
 add_shortcode('ef_payments_stats', function() {   
     $current_month = date('m');   
