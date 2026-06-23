@@ -1,4 +1,3 @@
-
 add_shortcode('ef_log_payment_btn', function() {   
     $tenants_query = new WP_Query([   
         'post_type'      => 'ef_tenant',   
@@ -43,7 +42,7 @@ add_shortcode('ef_log_payment_btn', function() {
             <div class="ef-input-flex-row-2col">   
                 <div class="ef-modal-input-field-group" style="margin-bottom:0;">   
                     <label>Amount (AED)</label>   
-                    <input type="number" id="ef_log_amount" placeholder="1200" class="ef-modal-element-input">   
+                    <input type="number" id="ef_log_amount" placeholder="Enter Amount" class="ef-modal-element-input">   
                 </div>   
                 <div class="ef-modal-input-field-group" style="margin-bottom:0;">   
                     <label>Method</label>   
@@ -104,8 +103,8 @@ add_shortcode('ef_log_payment_btn', function() {
         const date = document.getElementById('ef_log_date').value;   
         const period = document.getElementById('ef_log_period').value;   
    
-        if(!tenant || !amount || !date) {   
-            alert('Please select a tenant and enter the payment parameters.');   
+        if(!tenant || !amount || !date || !period) {   
+            alert('Please select a tenant and enter all payment parameters (including period).');   
             return;   
         }   
    
@@ -143,7 +142,7 @@ add_shortcode('ef_log_payment_btn', function() {
 add_action('wp_ajax_ef_action_create_payment_record', 'ef_callback_ajax_create_payment');   
 function ef_callback_ajax_create_payment() {   
     check_ajax_referer('ef_payment_nonce', 'nonce');
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'Unauthorized.']);
     }
 
@@ -151,25 +150,36 @@ function ef_callback_ajax_create_payment() {
     $amount     = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;   
     $method     = isset($_POST['method']) ? sanitize_text_field($_POST['method']) : 'Bank Transfer';   
     $date       = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';   
+    $period     = isset($_POST['period']) ? sanitize_text_field($_POST['period']) : ''; // YYYY-MM
    
-    if (!$tenant_id || !$amount || !$date) {   
+    if (!$tenant_id || !$amount || !$date || !$period) {   
         wp_send_json_error(['message' => 'Operational parameters data validation failure.']);   
     }   
    
     $tenant_name = get_the_title($tenant_id);   
     $post_title  = $tenant_name . ' - ' . date('M Y', strtotime($date));   
+    $post_date   = $period . '-01 00:00:00';
    
     $new_payment_id = wp_insert_post([   
         'post_title'  => $post_title,   
         'post_type'   => 'payment',    
-        'post_status' => 'publish'   
+        'post_status' => 'publish',
+        'post_date'   => $post_date,
+        'post_date_gmt' => get_gmt_from_date($post_date)
     ]);   
    
     if($new_payment_id && !is_wp_error($new_payment_id)) {   
-        update_field('associated_tenant', $tenant_id, $new_payment_id);    
-        update_field('amount_paid', $amount, $new_payment_id);             
-        update_field('date_of_payment', $date, $new_payment_id);   
-        update_field('mode_of_payment', $method, $new_payment_id);   
+        $meta = [
+            'associated_tenant' => $tenant_id,
+            'amount_paid'       => $amount,
+            'date_of_payment'   => $date,
+            'mode_of_payment'   => $method,
+            'payment_period'    => $period
+        ];
+        foreach ($meta as $k => $v) {
+            if (function_exists('update_field')) update_field($k, $v, $new_payment_id);
+            else update_post_meta($new_payment_id, $k, $v);
+        }
    
         wp_send_json_success(['payment_id' => $new_payment_id]);   
     }   
@@ -180,7 +190,7 @@ function ef_callback_ajax_create_payment() {
 add_action('wp_ajax_ef_action_update_payment_record', 'ef_callback_ajax_update_payment'); 
 function ef_callback_ajax_update_payment() { 
     check_ajax_referer('ef_payment_nonce', 'nonce');
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'Unauthorized.']);
     }
 
@@ -189,24 +199,35 @@ function ef_callback_ajax_update_payment() {
     $amount     = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;   
     $method     = isset($_POST['method']) ? sanitize_text_field($_POST['method']) : 'Bank Transfer';   
     $date       = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';   
+    $period     = isset($_POST['period']) ? sanitize_text_field($_POST['period']) : ''; // YYYY-MM
    
-    if (!$payment_id || !$tenant_id || !$amount || !$date) {   
+    if (!$payment_id || !$tenant_id || !$amount || !$date || !$period) {   
         wp_send_json_error(['message' => 'Operational parameters data validation failure.']);   
     }   
    
     $tenant_name = get_the_title($tenant_id);   
     $post_title  = $tenant_name . ' - ' . date('M Y', strtotime($date));   
+    $post_date   = $period . '-01 00:00:00';
    
     $updated_payment_id = wp_update_post([ 
         'ID'          => $payment_id, 
         'post_title'  => $post_title, 
+        'post_date'   => $post_date,
+        'post_date_gmt' => get_gmt_from_date($post_date)
     ]); 
    
     if($updated_payment_id && !is_wp_error($updated_payment_id)) {   
-        update_field('associated_tenant', $tenant_id, $payment_id);    
-        update_field('amount_paid', $amount, $payment_id);             
-        update_field('date_of_payment', $date, $payment_id);   
-        update_field('mode_of_payment', $method, $payment_id);   
+        $meta = [
+            'associated_tenant' => $tenant_id,
+            'amount_paid'       => $amount,
+            'date_of_payment'   => $date,
+            'mode_of_payment'   => $method,
+            'payment_period'    => $period
+        ];
+        foreach ($meta as $k => $v) {
+            if (function_exists('update_field')) update_field($k, $v, $payment_id);
+            else update_post_meta($payment_id, $k, $v);
+        }
    
         wp_send_json_success(['payment_id' => $payment_id]);   
     }   
@@ -216,6 +237,10 @@ function ef_callback_ajax_update_payment() {
  
 add_action('wp_ajax_ef_action_delete_payment_record', 'ef_callback_ajax_delete_payment'); 
 function ef_callback_ajax_delete_payment() { 
+    check_ajax_referer('ef_payment_nonce', 'nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error(['message' => 'Unauthorized.']);
+    }
     $payment_id = isset($_POST['payment_id']) ? intval($_POST['payment_id']) : 0; 
     if (!$payment_id) { 
         wp_send_json_error(['message' => 'Invalid payment ID.']); 
@@ -327,10 +352,10 @@ if ($query->have_posts()) {
         $query->the_post();     
         $payment_id = get_the_ID();     
    
-        $tenant_id  = get_field('associated_tenant', $payment_id);     
-        $amount     = get_field('amount_paid', $payment_id);     
-        $raw_date   = get_field('date_of_payment', $payment_id);     
-        $method     = get_field('mode_of_payment', $payment_id);     
+        $tenant_id  = get_field('associated_tenant', $payment_id) ?: get_post_meta($payment_id, 'associated_tenant', true);     
+        $amount     = get_field('amount_paid', $payment_id) ?: get_post_meta($payment_id, 'amount_paid', true);     
+        $raw_date   = get_field('date_of_payment', $payment_id) ?: get_post_meta($payment_id, 'date_of_payment', true);     
+        $method     = get_field('mode_of_payment', $payment_id) ?: get_post_meta($payment_id, 'mode_of_payment', true);     
    
         $amount_val   = $amount ? floatval($amount) : 0.00;     
         $method_txt   = $method ? $method : 'Bank Transfer';     
@@ -343,7 +368,7 @@ if ($query->have_posts()) {
             } 
         } 
    
-        $property_name = $tenant_id ? get_field('property_unit_name', $tenant_id) : '';     
+        $property_name = $tenant_id ? (get_field('property_unit_name', $tenant_id) ?: get_post_meta($tenant_id, 'property_unit_name', true)) : '';     
         if (!$property_name) {     
             $property_name = 'Lakeside Residences';      
         }     
@@ -521,9 +546,14 @@ function efProcessLedgerQueryMatrix() {
                 <td style="color: #475569;">${efEscapeOutputChar(entry.date)}</td>     
                 <td class="ef-cell-accent-currency-green">AED ${Number(entry.amount).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</td>     
                 <td style="text-align: right;">     
-                    <button class="ef-btn-receipt-pdf-download" title="Download PDF" onclick='efDownloadReceipt(efLedgerSourcePayload.find(item => item.id === ${entry.id}))'>     
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:inline-block; vertical-align:middle; margin-top:-2px;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>     
-                    </button>     
+                     <button class="ef-btn-receipt-pdf-download" title="Download PDF" onclick='efDownloadReceipt(efLedgerSourcePayload.find(item => item.id === ${entry.id}))'>     
+                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-top:-2px;">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+    </svg>     
+                    </button>  
+     
                     <button class="ef-btn-row-action" title="Edit" onclick='efEditTransaction(${entry.id})'> 
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:inline-block; vertical-align:middle; margin-top:-2px;"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> 
                     </button> 
@@ -618,7 +648,7 @@ function efDownloadReceipt(d) {
                 </div>  
                 <div style="text-align:right;">    
                     <div style="color:#00a86b; font-size:24px; font-weight:800; margin-bottom:4px; letter-spacing:-0.5px;">PAYMENT RECEIPT</div>    
-                    <div style="color:#64748b; font-size:13px;">Receipt Reference: <span id="r-ref" style="font-weight:700; color:#0f172a;">${esc(ref)}</span></div>    
+                    <div style="color:#64748b; font-size:13px;">Receipt Voucher: <span id="r-ref" style="font-weight:700; color:#0f172a;">${esc(ref)}</span></div>    
                 </div>    
             </div>    
             <div style="display:flex; justify-content:space-between; margin:32px 0;">    
