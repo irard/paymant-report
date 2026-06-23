@@ -398,15 +398,37 @@ add_shortcode('properties_page_grid', function() {
             border: 1px solid #e2e8f0;
             background: #fff;
         }
+        #properties-dashboard-wrapper {
+            display: block !important;
+            visibility: visible !important;
+            width: 100%;
+        }
         @media (max-width: 768px) {
             .properties-dashboard-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: 1fr !important;
+                display: block !important;
+                width: 100% !important;
+                min-height: 100px !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+            }
+            .properties-dashboard-card {
+                width: 100% !important;
+                display: block !important;
+                margin-bottom: 20px !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                border: 1px solid #e2e8f0 !important;
+                float: none !important;
+                clear: both !important;
             }
         }
     </style>
     <div id="properties-dashboard-wrapper">
         <input type="hidden" id="ef_property_nonce" value="<?php echo wp_create_nonce('ef_property_nonce'); ?>">
-        <div id="properties-dashboard-grid" class="properties-dashboard-grid"></div>
+        <div id="properties-dashboard-grid" class="properties-dashboard-grid">
+            <div class="properties-page-empty-state"><p>Loading properties...</p></div>
+        </div>
         <div class="properties-dashboard-nav">
             <button id="prev-page" class="prop-nav-btn" disabled>Previous</button>
             <span id="page-info">Page 1 of 1</span>
@@ -445,12 +467,12 @@ add_shortcode('properties_page_details', function() {
                 width: 100%;
                 height: 100%;
                 background: #fff;
-                z-index: 1000;
+                z-index: 2000; /* Increased z-index */
                 display: none;
                 overflow-y: auto;
                 padding: 20px;
                 box-sizing: border-box;
-				margin-top: 180px;
+				margin-top: 0 !important; /* Removed 180px margin */
             }
             .properties-page-sidebar.active {
                 display: block;
@@ -565,7 +587,10 @@ add_action('wp_footer', function() { ?>
             const start = (curPage - 1) * perPage;
             const slice = allData.slice(start, start + perPage);
 
-            grid.innerHTML = slice.map((p) => {
+            if (slice.length === 0) {
+                grid.innerHTML = `<div class="properties-page-empty-state"><p>No properties found.</p></div>`;
+            } else {
+                grid.innerHTML = slice.map((p) => {
                 const occPct = p.units > 0 ? (p.occupied / p.units) * 100 : 0;
                 const colPct = p.expected > 0 ? Math.round((p.collected / p.expected) * 100) : 0;
                 const activeClass = (window._propertiesActiveId && window._propertiesActiveId == p.id) ? 'active' : '';
@@ -586,7 +611,8 @@ add_action('wp_footer', function() { ?>
                         <button class="dashboard-btn delete-btn" data-id="${p.id}">🗑 Delete</button>
                     </div>
                 </div>`;
-            }).join('');
+                }).join('');
+            }
 
             Array.from(grid.querySelectorAll('.properties-dashboard-card')).forEach(card => {
                 card.onclick = (e) => {
@@ -655,7 +681,23 @@ add_action('wp_footer', function() { ?>
                 }
 
                 fetch(ajaxUrl, { method: 'POST', body: dashboardData })
-        .then(r => r.json()).then(res => { if(res.success) { allData = res.data; render(); } });
+                .then(r => r.json())
+                .then(res => {
+                    if(res.success) {
+                        allData = res.data;
+                        render();
+                    } else {
+                        if (grid) {
+                            grid.innerHTML = `<div class="properties-page-empty-state"><p>Error loading properties: ${res.data || 'Unknown error'}</p></div>`;
+                        }
+                    }
+                })
+                .catch(err => {
+                    console.error('Fetch error:', err);
+                    if (grid) {
+                        grid.innerHTML = `<div class="properties-page-empty-state"><p>Network error loading properties.</p></div>`;
+                    }
+                });
 
         if(prevBtn) prevBtn.onclick = () => { if (curPage>1) { curPage--; render(); } };
         if(nextBtn) nextBtn.onclick = () => { curPage++; render(); };

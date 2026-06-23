@@ -155,11 +155,13 @@ $tenant_list_logic = function() {
         }
         .ef-tenant-name {
             font-weight: 600;
-            color: #0f172a;
+            color: #0f172a !important;
+            display: block !important;
         }
         .ef-tenant-location {
             font-size: 12px;
-            color: #64748b;
+            color: #64748b !important;
+            display: block !important;
         }
         .ef-tenant-right-aside {
             text-align: right;
@@ -181,7 +183,44 @@ $tenant_list_logic = function() {
 
         @media (max-width: 768px) {
             .ef-dashboard-sidebar-independent {
-                max-width: 100%;
+                max-width: 100% !important;
+                width: 100% !important;
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                min-height: 100px;
+            }
+            .tenant-dashboard-grid {
+                display: block !important;
+                width: 100% !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                min-height: 50px;
+            }
+            .ef-tenant-card-item {
+                width: 100% !important;
+                box-sizing: border-box !important;
+                flex-direction: column !important;
+                align-items: flex-start !important;
+                gap: 12px !important;
+                display: flex !important;
+                background: #fff !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+            }
+            .ef-tenant-right-aside {
+                text-align: left !important;
+                width: 100% !important;
+                display: flex !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+                border-top: 1px solid #f1f5f9 !important;
+                padding-top: 8px !important;
+            }
+            .ef-search-box {
+                width: 100% !important;
+                box-sizing: border-box !important;
+                margin-bottom: 15px !important;
             }
         }
     </style>
