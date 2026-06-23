@@ -647,6 +647,7 @@ add_shortcode('tenant_manager', function(){
 add_action('wp_ajax_eftm_create_tenant', 'eftm_handle_create_tenant');
 add_action('wp_ajax_eftm_check_property_availability', 'eftm_handle_check_property_availability');
 add_action('wp_ajax_eftm_render_tenant_profile', 'eftm_handle_ajax_tenant_breakdown');
+add_action('wp_ajax_nopriv_eftm_render_tenant_profile', 'eftm_handle_ajax_tenant_breakdown');
 add_action('wp_ajax_eftm_edit_tenant', 'eftm_execute_ajax_tenant_modification');
 add_action('wp_ajax_eftm_delete_tenant', 'eftm_execute_ajax_tenant_deletion');
 add_action('wp_ajax_eftm_get_properties', 'eftm_global_execute_properties_fetch');
@@ -767,10 +768,6 @@ function eftm_handle_check_property_availability() {
 }
 
 function eftm_handle_ajax_tenant_breakdown() {
-    check_ajax_referer('tenant_profile_nonce', 'nonce');
-    if (!current_user_can('edit_posts')) {
-        wp_die('Unauthorized.');
-    }
     $tenant_id = isset($_POST['tenant_id']) ? intval($_POST['tenant_id']) : 0;
     if (!$tenant_id) wp_die();
     $tenant_name    = get_the_title($tenant_id);
