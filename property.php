@@ -4,7 +4,7 @@ add_action('wp_ajax_save_property', 'handle_save_property');
 
 function handle_save_property() {
     check_ajax_referer('ef_property_nonce', 'nonce');
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.');
     }
 
@@ -80,7 +80,7 @@ add_action('wp_ajax_delete_property', 'handle_delete_property');
 
 function handle_delete_property() {
     check_ajax_referer('ef_property_nonce', 'nonce');
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.');
     }
 
@@ -100,7 +100,7 @@ function handle_delete_property() {
 add_action('wp_ajax_get_properties_dashboard', 'handle_get_properties_dashboard');
 function handle_get_properties_dashboard() {
     check_ajax_referer('ef_property_nonce', 'nonce');
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.');
     }
 
@@ -216,7 +216,7 @@ function handle_get_properties_dashboard() {
 add_action('wp_ajax_get_property_tenants_simple', 'handle_get_property_tenants_simple');
 function handle_get_property_tenants_simple() {
     check_ajax_referer('ef_property_nonce', 'nonce');
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error('Unauthorized.');
     }
 

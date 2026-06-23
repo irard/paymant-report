@@ -143,7 +143,7 @@ add_shortcode('ef_log_payment_btn', function() {
 add_action('wp_ajax_ef_action_create_payment_record', 'ef_callback_ajax_create_payment');   
 function ef_callback_ajax_create_payment() {   
     check_ajax_referer('ef_payment_nonce', 'nonce');
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'Unauthorized.']);
     }
 
@@ -180,7 +180,7 @@ function ef_callback_ajax_create_payment() {
 add_action('wp_ajax_ef_action_update_payment_record', 'ef_callback_ajax_update_payment'); 
 function ef_callback_ajax_update_payment() { 
     check_ajax_referer('ef_payment_nonce', 'nonce');
-    if (!current_user_can('edit_posts')) {
+    if (!is_user_logged_in()) {
         wp_send_json_error(['message' => 'Unauthorized.']);
     }
 

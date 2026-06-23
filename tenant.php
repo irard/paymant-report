@@ -188,14 +188,15 @@ $tenant_list_logic = function() {
                 display: block !important;
                 visibility: visible !important;
                 opacity: 1 !important;
-                min-height: 100px;
+                min-height: 100px !important;
+                background: #fff !important;
             }
             .tenant-dashboard-grid {
                 display: block !important;
                 width: 100% !important;
                 visibility: visible !important;
                 opacity: 1 !important;
-                min-height: 50px;
+                min-height: 50px !important;
             }
             .ef-tenant-card-item {
                 width: 100% !important;
@@ -686,7 +687,6 @@ add_shortcode('tenant_manager', function(){
 add_action('wp_ajax_eftm_create_tenant', 'eftm_handle_create_tenant');
 add_action('wp_ajax_eftm_check_property_availability', 'eftm_handle_check_property_availability');
 add_action('wp_ajax_eftm_render_tenant_profile', 'eftm_handle_ajax_tenant_breakdown');
-add_action('wp_ajax_nopriv_eftm_render_tenant_profile', 'eftm_handle_ajax_tenant_breakdown');
 add_action('wp_ajax_eftm_edit_tenant', 'eftm_execute_ajax_tenant_modification');
 add_action('wp_ajax_eftm_delete_tenant', 'eftm_execute_ajax_tenant_deletion');
 add_action('wp_ajax_eftm_get_properties', 'eftm_global_execute_properties_fetch');
@@ -807,6 +807,11 @@ function eftm_handle_check_property_availability() {
 }
 
 function eftm_handle_ajax_tenant_breakdown() {
+    if (!is_user_logged_in()) {
+        wp_die('Unauthorized.');
+    }
+    check_ajax_referer('tenant_profile_nonce', 'nonce');
+
     $tenant_id = isset($_POST['tenant_id']) ? intval($_POST['tenant_id']) : 0;
     if (!$tenant_id) wp_die();
     $tenant_name    = get_the_title($tenant_id);
