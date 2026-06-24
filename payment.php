@@ -685,6 +685,7 @@ function efDownloadReceipt(d) {
     const date = d.date || '';  
     const period = d.period || '';  
     const method = d.method || '';  
+    const cheque = d.transaction_cheque_number || '';
     const amount = d.amount_formatted || (typeof d.amount === 'number' ? d.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : d.amount);  
   
     const wrapper = document.createElement('div');  
@@ -717,6 +718,7 @@ function efDownloadReceipt(d) {
                 <div style="text-align:right; min-width:240px;">   
                     <div style="color:#94a3b8; font-size:11px; font-weight:700; text-transform:uppercase; margin-bottom:12px; letter-spacing:0.5px;">Transaction Details</div>   
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; font-size:13px; text-align:left;">   
+                        <span style="color:#64748b; font-weight:600;">Ref/Cheque:</span><span style="text-align:right; font-weight:700; color:#0f172a;">${esc(cheque)}</span>
                         <span style="color:#64748b; font-weight:600;">Payment Date:</span><span style="text-align:right; font-weight:700; color:#0f172a;">${esc(date)}</span>   
                         <span style="color:#64748b; font-weight:600;">Allocation Period:</span><span style="text-align:right; font-weight:700; color:#0f172a;">${esc(period)}</span>   
                         <span style="color:#64748b; font-weight:600;">Method:</span><span style="text-align:right; font-weight:700; color:#0f172a;">${esc(method)}</span>   

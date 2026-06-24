@@ -357,6 +357,7 @@ add_shortcode('tenant_profile', function() {
                 <div style="text-align:right; min-width:240px;"> 
                     <div style="color:#94a3b8; font-size:11px; font-weight:700; text-transform:uppercase; margin-bottom:12px; letter-spacing:0.5px;">Transaction Details</div> 
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; font-size:13px; text-align:left;"> 
+                        <span style="color:#64748b; font-weight:600;">Ref/Cheque:</span><span id="r-cheque" style="text-align:right; font-weight:700; color:#0f172a;"></span>
                         <span style="color:#64748b; font-weight:600;">Payment Date:</span><span id="r-date" style="text-align:right; font-weight:700; color:#0f172a;"></span> 
                         <span style="color:#64748b; font-weight:600;">Allocation Period:</span><span id="r-period" style="text-align:right; font-weight:700; color:#0f172a;"></span> 
                         <span style="color:#64748b; font-weight:600;">Method:</span><span id="r-method" style="text-align:right; font-weight:700; color:#0f172a;"></span> 
@@ -433,6 +434,7 @@ add_shortcode('tenant_profile', function() {
                 btn.onclick = () => { 
                     const d = btn.dataset; 
                     document.getElementById('r-ref').innerText = d.ref; document.getElementById('r-tenant').innerText = d.tenant; document.getElementById('r-prop').innerText = d.prop; 
+                    document.getElementById('r-cheque').innerText = d.cheque || '';
                     document.getElementById('r-date').innerText = d.date; document.getElementById('r-period').innerText = d.period; document.getElementById('r-method').innerText = d.method; 
                     document.getElementById('r-amt-table').innerText = d.amount; document.getElementById('r-amt-total').innerText = d.amount; 
                     document.getElementById('r-desc').innerText = `Unit Reference: ${d.prop} (${d.period})`; 
@@ -679,6 +681,7 @@ function eftm_handle_ajax_tenant_breakdown() {
                 'id' => $pay_id, 'period' => date('Y-m', $ts), 'date' => date('n/j/Y', $ts), 
                 'method' => (get_field('mode_of_payment', $pay_id) ?: get_post_meta($pay_id, 'mode_of_payment', true)) ?: 'Cash', 
                 'amount' => floatval(get_field('amount_paid', $pay_id) ?: get_post_meta($pay_id, 'amount_paid', true)),
+                'cheque' => get_field('transaction_cheque_number', $pay_id) ?: get_post_meta($pay_id, 'transaction_cheque_number', true),
                 'receipt_voucher' => get_field('receipt_voucher', $pay_id) ?: get_post_meta($pay_id, 'receipt_voucher', true)
             ]; 
         } 
@@ -734,6 +737,7 @@ function eftm_handle_ajax_tenant_breakdown() {
                             data-ref="<?php echo esc_attr($p['receipt_voucher'] ?: 'REC-' . str_pad($p['id'], 6, '0', STR_PAD_LEFT)); ?>" data-tenant="<?php echo esc_attr($tenant_name); ?>"
                             data-prop="<?php echo esc_attr($property_display); ?>" data-date="<?php echo esc_attr($p['date']); ?>" 
                             data-period="<?php echo esc_attr($p['period']); ?>" data-method="<?php echo esc_attr($p['method']); ?>" 
+                            data-cheque="<?php echo esc_attr($p['cheque']); ?>"
                             data-amount="<?php echo number_format($p['amount'], 2); ?>"> 
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block; vertical-align:middle; margin-top:-2px;">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
