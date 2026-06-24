@@ -197,12 +197,31 @@ function ef_callback_ajax_create_payment() {
     ]);   
    
     if($new_payment_id && !is_wp_error($new_payment_id)) {   
+        // Calculate next receipt voucher number
+        $last_payments = get_posts([
+            'post_type'      => 'payment',
+            'post_status'    => 'publish',
+            'posts_per_page' => 1,
+            'meta_key'       => 'receipt_voucher',
+            'orderby'        => 'meta_value_num',
+            'order'          => 'DESC',
+            'post__not_in'   => [$new_payment_id]
+        ]);
+
+        $next_voucher_int = 1;
+        if (!empty($last_payments)) {
+            $last_voucher = get_post_meta($last_payments[0]->ID, 'receipt_voucher', true);
+            $next_voucher_int = intval($last_voucher) + 1;
+        }
+        $receipt_voucher = str_pad($next_voucher_int, 3, '0', STR_PAD_LEFT);
+
         $meta = [
             'associated_tenant' => $tenant_id,
             'amount_paid'       => $amount,
             'date_of_payment'   => $date,
             'mode_of_payment'   => $method,
             'transaction_cheque_number' => $transaction_cheque_number,
+            'receipt_voucher'   => $receipt_voucher,
             'payment_period'    => $period
         ];
         foreach ($meta as $k => $v) {
@@ -388,6 +407,7 @@ if ($query->have_posts()) {
         $raw_date   = get_field('date_of_payment', $payment_id) ?: get_post_meta($payment_id, 'date_of_payment', true);     
         $method     = get_field('mode_of_payment', $payment_id) ?: get_post_meta($payment_id, 'mode_of_payment', true);     
         $transaction_cheque_number = get_field('transaction_cheque_number', $payment_id) ?: get_post_meta($payment_id, 'transaction_cheque_number', true);
+        $receipt_voucher = get_field('receipt_voucher', $payment_id) ?: get_post_meta($payment_id, 'receipt_voucher', true);
 
         $amount_val   = $amount ? floatval($amount) : 0.00;     
         $method_txt   = $method ? $method : 'Bank Transfer';     
@@ -429,6 +449,7 @@ if ($query->have_posts()) {
             'period'    => $period_val,     
             'method'    => $method_txt,     
             'transaction_cheque_number' => $transaction_cheque_number,
+            'receipt_voucher' => $receipt_voucher,
             'date'      => $date_format, 
             'raw_date'  => $iso_date, 
             'amount'    => $amount_val     
@@ -658,7 +679,7 @@ function efDownloadReceipt(d) {
         return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");  
     };  
   
-    const ref = d.ref || ('REC-' + String(d.id).padStart(6, '0'));  
+    const ref = d.receipt_voucher || d.ref || ('REC-' + String(d.id).padStart(6, '0'));
     const tenant = d.tenant || 'Unknown';  
     const prop = d.property || d.prop || 'N/A';  
     const date = d.date || '';  

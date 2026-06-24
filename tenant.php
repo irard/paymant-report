@@ -678,7 +678,8 @@ function eftm_handle_ajax_tenant_breakdown() {
             $payment_history[] = [ 
                 'id' => $pay_id, 'period' => date('Y-m', $ts), 'date' => date('n/j/Y', $ts), 
                 'method' => (get_field('mode_of_payment', $pay_id) ?: get_post_meta($pay_id, 'mode_of_payment', true)) ?: 'Cash', 
-                'amount' => floatval(get_field('amount_paid', $pay_id) ?: get_post_meta($pay_id, 'amount_paid', true)) 
+                'amount' => floatval(get_field('amount_paid', $pay_id) ?: get_post_meta($pay_id, 'amount_paid', true)),
+                'receipt_voucher' => get_field('receipt_voucher', $pay_id) ?: get_post_meta($pay_id, 'receipt_voucher', true)
             ]; 
         } 
         wp_reset_postdata(); 
@@ -730,7 +731,7 @@ function eftm_handle_ajax_tenant_breakdown() {
                 <div class="ef-pay-row-right"> 
                     <div class="ef-pay-amount-value">AED <?php echo number_format($p['amount'], 2); ?></div> 
                     <button class="ef-btn-receipt" 
-                            data-ref="REC-<?php echo str_pad($p['id'], 6, '0', STR_PAD_LEFT); ?>" data-tenant="<?php echo esc_attr($tenant_name); ?>" 
+                            data-ref="<?php echo esc_attr($p['receipt_voucher'] ?: 'REC-' . str_pad($p['id'], 6, '0', STR_PAD_LEFT)); ?>" data-tenant="<?php echo esc_attr($tenant_name); ?>"
                             data-prop="<?php echo esc_attr($property_display); ?>" data-date="<?php echo esc_attr($p['date']); ?>" 
                             data-period="<?php echo esc_attr($p['period']); ?>" data-method="<?php echo esc_attr($p['method']); ?>" 
                             data-amount="<?php echo number_format($p['amount'], 2); ?>"> 
