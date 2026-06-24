@@ -1,3 +1,4 @@
+<?php
 add_shortcode('ef_dashboard_actions', function() { 
     if (!is_user_logged_in()) return '';
     $current_year = date('Y'); 

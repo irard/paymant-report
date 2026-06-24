@@ -1,3 +1,4 @@
+<?php
 add_shortcode('ef_log_payment_btn', function() {   
     $tenants_query = new WP_Query([   
         'post_type'      => 'ef_tenant',   
@@ -53,7 +54,12 @@ add_shortcode('ef_log_payment_btn', function() {
                         <option value="Card Payment">Card Payment</option>   
                     </select>   
                 </div>   
-            </div>   
+            </div>
+
+            <div class="ef-modal-input-field-group">
+                <label>Transaction/Cheque Number</label>
+                <input type="text" id="ef_log_transaction_cheque_number" placeholder="Enter Reference Number" class="ef-modal-element-input">
+            </div>
    
             <div class="ef-input-flex-row-2col">   
                 <div class="ef-modal-input-field-group" style="margin-bottom:0;">   
@@ -90,6 +96,7 @@ add_shortcode('ef_log_payment_btn', function() {
         document.getElementById('ef_log_tenant').value = ''; 
         document.getElementById('ef_log_amount').value = ''; 
         document.getElementById('ef_log_method').value = 'Bank Transfer'; 
+        document.getElementById('ef_log_transaction_cheque_number').value = '';
         document.getElementById('ef_log_period').value = '<?php echo date('Y-m'); ?>'; 
         document.getElementById('ef_log_date').value = '<?php echo date('Y-m-d'); ?>'; 
         document.getElementById('efLogPaymentGlobalModal').style.display = 'flex'; 
@@ -100,6 +107,7 @@ add_shortcode('ef_log_payment_btn', function() {
         const tenant = document.getElementById('ef_log_tenant').value;   
         const amount = document.getElementById('ef_log_amount').value;   
         const method = document.getElementById('ef_log_method').value;   
+        const transaction_cheque_number = document.getElementById('ef_log_transaction_cheque_number').value;
         const date = document.getElementById('ef_log_date').value;   
         const period = document.getElementById('ef_log_period').value;   
    
@@ -115,6 +123,7 @@ add_shortcode('ef_log_payment_btn', function() {
         fd.append('tenant_id', tenant);   
         fd.append('amount', amount);   
         fd.append('method', method);   
+        fd.append('transaction_cheque_number', transaction_cheque_number);
         fd.append('date', date);   
         fd.append('period', period);   
    
@@ -149,6 +158,7 @@ function ef_callback_ajax_create_payment() {
     $tenant_id  = isset($_POST['tenant_id']) ? intval($_POST['tenant_id']) : 0;   
     $amount     = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;   
     $method     = isset($_POST['method']) ? sanitize_text_field($_POST['method']) : 'Bank Transfer';   
+    $transaction_cheque_number = isset($_POST['transaction_cheque_number']) ? sanitize_text_field($_POST['transaction_cheque_number']) : '';
     $date       = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';   
     $period     = isset($_POST['period']) ? sanitize_text_field($_POST['period']) : ''; // YYYY-MM
    
@@ -174,6 +184,7 @@ function ef_callback_ajax_create_payment() {
             'amount_paid'       => $amount,
             'date_of_payment'   => $date,
             'mode_of_payment'   => $method,
+            'transaction_cheque_number' => $transaction_cheque_number,
             'payment_period'    => $period
         ];
         foreach ($meta as $k => $v) {
@@ -198,6 +209,7 @@ function ef_callback_ajax_update_payment() {
     $tenant_id  = isset($_POST['tenant_id']) ? intval($_POST['tenant_id']) : 0;   
     $amount     = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;   
     $method     = isset($_POST['method']) ? sanitize_text_field($_POST['method']) : 'Bank Transfer';   
+    $transaction_cheque_number = isset($_POST['transaction_cheque_number']) ? sanitize_text_field($_POST['transaction_cheque_number']) : '';
     $date       = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';   
     $period     = isset($_POST['period']) ? sanitize_text_field($_POST['period']) : ''; // YYYY-MM
    
@@ -222,6 +234,7 @@ function ef_callback_ajax_update_payment() {
             'amount_paid'       => $amount,
             'date_of_payment'   => $date,
             'mode_of_payment'   => $method,
+            'transaction_cheque_number' => $transaction_cheque_number,
             'payment_period'    => $period
         ];
         foreach ($meta as $k => $v) {
@@ -356,7 +369,8 @@ if ($query->have_posts()) {
         $amount     = get_field('amount_paid', $payment_id) ?: get_post_meta($payment_id, 'amount_paid', true);     
         $raw_date   = get_field('date_of_payment', $payment_id) ?: get_post_meta($payment_id, 'date_of_payment', true);     
         $method     = get_field('mode_of_payment', $payment_id) ?: get_post_meta($payment_id, 'mode_of_payment', true);     
-   
+        $transaction_cheque_number = get_field('transaction_cheque_number', $payment_id) ?: get_post_meta($payment_id, 'transaction_cheque_number', true);
+
         $amount_val   = $amount ? floatval($amount) : 0.00;     
         $method_txt   = $method ? $method : 'Bank Transfer';     
          
@@ -398,6 +412,7 @@ if ($query->have_posts()) {
             'property'  => $property_name,     
             'period'    => $period_val,     
             'method'    => $method_txt,     
+            'transaction_cheque_number' => $transaction_cheque_number,
             'date'      => $date_format, 
             'raw_date'  => $iso_date, 
             'amount'    => $amount_val     
@@ -451,7 +466,7 @@ ob_start();
 <div class="ef-ledger-table-wrapper">     
     <div class="ef-ledger-control-bar">     
         <div class="ef-ledger-search-box-holder">     
-            <input type="text" id="efLedgerInputSearch" oninput="efProcessLedgerQueryMatrix()" placeholder="Search tenant, property, method...">     
+            <input type="text" id="efLedgerInputSearch" oninput="efProcessLedgerQueryMatrix()" placeholder="Search tenant, property, method, ref...">
         </div>     
    
         <select id="efLedgerSelectTenant" onchange="efProcessLedgerQueryMatrix()" class="ef-ledger-select-filter">     
@@ -487,6 +502,7 @@ ob_start();
                 <th>Property</th>     
                 <th>Period</th>     
                 <th>Method</th>     
+                <th>Ref/Cheque</th>
                 <th>Date</th>     
                 <th>Amount</th>     
                 <th style="text-align: right;">Actions</th>     
@@ -524,7 +540,8 @@ function efProcessLedgerQueryMatrix() {
         const matchSearch = !queryStr ||      
                             entry.tenant.toLowerCase().includes(queryStr) ||      
                             entry.property.toLowerCase().includes(queryStr) ||      
-                            entry.method.toLowerCase().includes(queryStr);     
+                            entry.method.toLowerCase().includes(queryStr) ||
+                            (entry.transaction_cheque_number && entry.transaction_cheque_number.toLowerCase().includes(queryStr));
    
         const matchTenant = !selTenant || entry.tenant === selTenant;     
         const matchMethod = !selMethod || entry.method === selMethod;     
@@ -543,6 +560,7 @@ function efProcessLedgerQueryMatrix() {
                 <td style="color: #475569;">${efEscapeOutputChar(entry.property)}</td>     
                 <td><span class="ef-badge-pill-period">${efEscapeOutputChar(entry.period)}</span></td>     
                 <td style="color: #475569;">${efEscapeOutputChar(entry.method)}</td>     
+                <td style="color: #475569;">${efEscapeOutputChar(entry.transaction_cheque_number)}</td>
                 <td style="color: #475569;">${efEscapeOutputChar(entry.date)}</td>     
                 <td class="ef-cell-accent-currency-green">AED ${Number(entry.amount).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</td>     
                 <td style="text-align: right;">     
@@ -590,6 +608,7 @@ function efEditTransaction(id) {
     document.getElementById('ef_log_tenant').value = entry.tenant_id; 
     document.getElementById('ef_log_amount').value = entry.amount; 
     document.getElementById('ef_log_method').value = entry.method; 
+    document.getElementById('ef_log_transaction_cheque_number').value = entry.transaction_cheque_number || '';
     document.getElementById('ef_log_period').value = entry.period; 
     document.getElementById('ef_log_date').value = entry.raw_date; 
  
