@@ -34,7 +34,8 @@ add_shortcode('ef_log_payment_btn', function() {
                             $tenants_query->the_post();   
                             $tid = get_the_ID();
                             $rent = get_field('monthly_rent', $tid) ?: get_post_meta($tid, 'monthly_rent', true);
-                            echo '<option value="'.$tid.'" data-rent="'.esc_attr($rent).'">'.get_the_title().'</option>';
+                            $due  = get_field('rent_due_day', $tid) ?: get_post_meta($tid, 'rent_due_day', true);
+                            echo '<option value="'.$tid.'" data-rent="'.esc_attr($rent).'" data-due="'.esc_attr($due).'">'.get_the_title().'</option>';
                         }   
                         wp_reset_postdata();   
                     }   
@@ -95,12 +96,22 @@ add_shortcode('ef_log_payment_btn', function() {
         const tenantSelect = document.getElementById('ef_log_tenant');
         if (tenantSelect) {
             tenantSelect.onchange = function() {
-                const rent = this.selectedOptions[0]?.dataset.rent;
+                const selected = this.selectedOptions[0];
+                const rent = selected?.dataset.rent;
+                const due = selected?.dataset.due;
                 const amountInput = document.getElementById('ef_log_amount');
                 if (rent && rent > 0) {
                     amountInput.placeholder = 'Rent: ' + Number(rent).toLocaleString();
                 } else {
                     amountInput.placeholder = 'Enter Amount';
+                }
+
+                if (due) {
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    const day = String(due).padStart(2, '0');
+                    document.getElementById('ef_log_period').value = `${year}-${month}-${day}`;
                 }
             };
         }
@@ -204,7 +215,7 @@ function ef_callback_ajax_create_payment() {
    
     $tenant_name = get_the_title($tenant_id);   
     $post_title  = $tenant_name . ' - ' . date('M Y', strtotime($date));   
-    $post_date   = $period . '-01 00:00:00';
+    $post_date   = (strlen($period) === 7 ? $period . '-01' : $period) . ' 00:00:00';
    
     $new_payment_id = wp_insert_post([   
         'post_title'  => $post_title,   
@@ -293,7 +304,7 @@ function ef_callback_ajax_update_payment() {
    
     $tenant_name = get_the_title($tenant_id);   
     $post_title  = $tenant_name . ' - ' . date('M Y', strtotime($date));   
-    $post_date   = $period . '-01 00:00:00';
+    $post_date   = (strlen($period) === 7 ? $period . '-01' : $period) . ' 00:00:00';
    
     $updated_payment_id = wp_update_post([ 
         'ID'          => $payment_id, 
@@ -460,15 +471,18 @@ if ($query->have_posts()) {
         $property_id = $tenant_id ? (get_field('property_id', $tenant_id) ?: get_post_meta($tenant_id, 'property_id', true)) : 0;
         $property_name = $property_id ? get_the_title($property_id) : 'Lakeside Residences';
    
+        $period_val = get_field('payment_period', $payment_id) ?: get_post_meta($payment_id, 'payment_period', true);
+        if (!$period_val) {
+            $period_val = get_the_date('Y-m', $payment_id);
+        }
+
         if ($raw_date) {     
             $timestamp   = strtotime($raw_date);     
             $date_format = date('n/j/Y', $timestamp);     
             $iso_date    = date('Y-m-d', $timestamp); 
-            $period_val  = date('Y-m', $timestamp);     
         } else {     
             $date_format = get_the_date('n/j/Y', $payment_id);     
             $iso_date    = get_the_date('Y-m-d', $payment_id); 
-            $period_val  = get_the_date('Y-m', $payment_id);     
         }     
    
         if ($tenant_id && $tenant_name !== 'Out of contract' && !in_array($tenant_name, $unique_tenants)) {     
