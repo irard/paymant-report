@@ -1,0 +1,804 @@
+add_action('wp_ajax_save_property', 'ef_handle_save_property');
+
+if (!function_exists('ef_handle_save_property')) {
+function ef_handle_save_property() {
+    check_ajax_referer('ef_property_nonce', 'nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error('Unauthorized.');
+    }
+
+    $property_id = !empty($_POST['property_id']) ? intval($_POST['property_id']) : 0;
+
+    if (empty($_POST['name']) || empty($_POST['type']) || !isset($_POST['units']) || $_POST['units'] === '' || empty($_POST['address'])) {
+        wp_send_json_error('All fields are required.');
+    }
+
+    $address = sanitize_text_field($_POST['address']);
+
+    $duplicate_check = get_posts([
+        'post_type'  => 'property',
+        'meta_query' => [
+            [
+                'key'   => 'add_address',
+                'value' => $address,
+            ]
+        ],
+        'exclude'    => [$property_id],
+        'fields'     => 'ids',
+        'numberposts'=> 1
+    ]);
+
+    if (!empty($duplicate_check)) {
+        wp_send_json_error('A property with this address already exists.');
+    }
+
+    $post_data = [
+        'post_title'  => sanitize_text_field($_POST['name']),
+        'post_type'   => 'property',
+        'post_status' => 'publish'
+    ];
+
+    if ($property_id > 0) {
+        if (get_post_type($property_id) !== 'property') {
+            wp_send_json_error('Invalid property ID provided.');
+        }
+        $post_data['ID'] = $property_id;
+        $post_id = wp_update_post($post_data);
+    } else {
+        $post_id = wp_insert_post($post_data);
+    }
+
+    if (is_wp_error($post_id) || $post_id === 0) {
+        $err_msg = is_wp_error($post_id) ? $post_id->get_error_message() : 'Failed to save post.';
+        wp_send_json_error('Database Error: ' . $err_msg);
+    }
+
+    $name    = sanitize_text_field($_POST['name']);
+    $type    = sanitize_text_field($_POST['type']);
+    $units   = intval($_POST['units']);
+
+    if (function_exists('update_field')) {
+        update_field('add_property', $name, $post_id);
+        update_field('property_type', $type, $post_id);
+        update_field('number_unit', $units, $post_id);
+        update_field('add_address', $address, $post_id);
+    } else {
+        update_post_meta($post_id, 'add_property', $name);
+        update_post_meta($post_id, 'property_type', $type);
+        update_post_meta($post_id, 'number_unit', $units);
+        update_post_meta($post_id, 'add_address', $address);
+    }
+
+
+    update_post_meta($post_id, 'property_units', $units);
+
+    wp_send_json_success(['id' => $post_id]);
+}
+}
+
+add_action('wp_ajax_delete_property', 'ef_handle_delete_property');
+
+if (!function_exists('ef_handle_delete_property')) {
+function ef_handle_delete_property() {
+    check_ajax_referer('ef_property_nonce', 'nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error('Unauthorized.');
+    }
+
+    $property_id = !empty($_POST['property_id']) ? intval($_POST['property_id']) : 0;
+
+    if (!$property_id || get_post_type($property_id) !== 'property') {
+        wp_send_json_error('Invalid Property ID.');
+    }
+
+    if (wp_delete_post($property_id, true)) {
+        wp_send_json_success();
+    } else {
+        wp_send_json_error('Failed to delete property.');
+    }
+}
+}
+
+add_action('wp_ajax_get_properties_dashboard', 'ef_handle_get_properties_dashboard');
+if (!function_exists('ef_handle_get_properties_dashboard')) {
+function ef_handle_get_properties_dashboard() {
+    check_ajax_referer('ef_property_nonce', 'nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error('Unauthorized.');
+    }
+
+    $properties = get_posts([
+        'post_type'   => 'property',
+        'numberposts' => -1,
+        'post_status' => 'publish',
+        'orderby'     => 'date',
+        'order'       => 'DESC'
+    ]);
+
+    if (empty($properties)) {
+        wp_send_json_success([]);
+    }
+
+    $property_ids = wp_list_pluck($properties, 'ID');
+
+
+    $all_tenants = get_posts([
+        'post_type'   => 'ef_tenant',
+        'post_status' => 'publish',
+        'numberposts' => -1,
+        'meta_query'  => [
+            [
+                'key'     => 'property_id',
+                'value'   => $property_ids,
+                'compare' => 'IN',
+            ],
+        ],
+    ]);
+
+    $tenants_by_property = [];
+    $all_tenant_ids = [];
+    foreach ($all_tenants as $t) {
+        $p_id = get_post_meta($t->ID, 'property_id', true);
+        $tenants_by_property[$p_id][] = $t;
+        $all_tenant_ids[] = $t->ID;
+    }
+
+
+    $current_month = date('m');
+    $current_year  = date('Y');
+
+    $all_payments = [];
+    if (!empty($all_tenant_ids)) {
+        $all_payments = get_posts([
+            'post_type'      => 'payment',
+            'posts_per_page' => -1,
+            'post_status'    => 'publish',
+            'date_query'     => [['year' => $current_year, 'month' => $current_month]],
+            'meta_query'     => [['key' => 'associated_tenant', 'value' => $all_tenant_ids, 'compare' => 'IN']]
+        ]);
+    }
+
+    $payments_by_tenant = [];
+    foreach ($all_payments as $pay) {
+        $t_id = get_post_meta($pay->ID, 'associated_tenant', true);
+        $payments_by_tenant[$t_id][] = $pay;
+    }
+
+    $data = [];
+    foreach ($properties as $p) {
+        $p_tenants = isset($tenants_by_property[$p->ID]) ? $tenants_by_property[$p->ID] : [];
+        $occupied = count($p_tenants);
+
+        $units = 0;
+        if (function_exists('get_field')) {
+            $units = intval(get_field('number_unit', $p->ID));
+        }
+        if (!$units) {
+            $units = intval(get_post_meta($p->ID, 'number_unit', true)) ?: intval(get_post_meta($p->ID, 'property_units', true)) ?: 0;
+        }
+
+        $expected = 0;
+        $collected = 0;
+        foreach ($p_tenants as $t) {
+            $monthly_rent = 0;
+            if (function_exists('get_field')) {
+                $monthly_rent = floatval(get_field('monthly_rent', $t->ID));
+            }
+            if (!$monthly_rent) {
+                $monthly_rent = floatval(get_post_meta($t->ID, 'monthly_rent', true));
+            }
+            $expected += $monthly_rent;
+
+            $t_payments = isset($payments_by_tenant[$t->ID]) ? $payments_by_tenant[$t->ID] : [];
+            foreach ($t_payments as $pay) {
+                $amount_paid = 0;
+                if (function_exists('get_field')) {
+                    $amount_paid = floatval(get_field('amount_paid', $pay->ID));
+                }
+                if (!$amount_paid) {
+                    $amount_paid = floatval(get_post_meta($pay->ID, 'amount_paid', true));
+                }
+                $collected += $amount_paid;
+            }
+        }
+
+        $data[] = [
+            'id'        => $p->ID,
+            'name'      => function_exists('get_field') ? (get_field('add_property', $p->ID) ?: $p->post_title) : $p->post_title,
+            'type'      => function_exists('get_field') ? (get_field('property_type', $p->ID) ?: 'Property') : (get_post_meta($p->ID, 'property_type', true) ?: 'Property'),
+            'units'     => $units,
+            'occupied'  => $occupied,
+            'address'   => function_exists('get_field') ? get_field('add_address', $p->ID) : get_post_meta($p->ID, 'add_address', true),
+            'expected'  => $expected,
+            'collected' => $collected
+        ];
+    }
+    wp_send_json_success($data);
+}
+}
+
+add_action('wp_ajax_get_property_tenants_simple', 'ef_handle_get_property_tenants_simple');
+if (!function_exists('ef_handle_get_property_tenants_simple')) {
+function ef_handle_get_property_tenants_simple() {
+    check_ajax_referer('ef_property_nonce', 'nonce');
+    if (!is_user_logged_in()) {
+        wp_send_json_error('Unauthorized.');
+    }
+
+    $property_id = intval($_POST['property_id'] ?? 0);
+    if (!$property_id) {
+        wp_send_json_error('Property ID missing');
+    }
+
+    $tenants = get_posts([
+        'post_type'      => 'ef_tenant',
+        'posts_per_page' => -1,
+        'post_status'    => 'publish',
+        'meta_query'     => [
+            [
+                'key'   => 'property_id',
+                'value' => $property_id,
+            ]
+        ]
+    ]);
+
+    $data = [];
+    foreach ($tenants as $t) {
+        $tid = $t->ID;
+        $rent = function_exists('get_field') ? get_field('monthly_rent', $tid) : get_post_meta($tid, 'monthly_rent', true);
+        $unit = function_exists('get_field') ? get_field('tenant_unit', $tid) : get_post_meta($tid, 'tenant_unit', true);
+
+        $address = function_exists('get_field') ? get_field('tenant_address', $tid) : get_post_meta($tid, 'tenant_address', true);
+
+        $data[] = [
+            'id'          => $tid,
+            'name'        => $t->post_title,
+            'unit'        => $unit ?: 'N/A',
+            'address'     => $address ?: 'N/A',
+            'rent'        => floatval($rent)
+        ];
+    }
+    wp_send_json_success($data);
+}
+}
+
+add_shortcode('properties_page_add_btn', function() {
+    ob_start(); ?>
+    <style>
+        .properties-page-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            overflow-y: auto;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .properties-page-modal.properties-page-hidden {
+            display: none;
+        }
+        .properties-page-modal-content {
+            background: #fff;
+            padding: 24px;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 500px;
+            position: relative;
+            margin: auto;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+    </style>
+    <button id="properties-page-add-trigger" class="properties-page-btn-primary">+ Add property</button>
+
+    <div id="properties-page-modal" class="properties-page-modal properties-page-hidden">
+        <div class="properties-page-modal-content">
+            <div class="properties-page-modal-header">
+                <h3 id="modal-title">Add property</h3>
+                <button id="properties-page-close-btn" class="properties-page-close-btn">&times;</button>
+            </div>
+            <form id="properties-page-form">
+                <input type="hidden" id="in-id" value="">
+                <input type="hidden" id="ef_property_nonce" value="<?php echo wp_create_nonce('ef_property_nonce'); ?>">
+                <label>Name</label><input type="text" id="in-name" required placeholder="e.g. Sunset Apartments">
+
+                <div class="properties-page-row">
+                    <div class="properties-page-col">
+                        <label>Type</label><input type="text" id="in-type" required placeholder="e.g. Residential">
+                    </div>
+                    <div class="properties-page-col">
+                        <label>Units</label><input type="number" id="in-units" required min="0">
+                    </div>
+                </div>
+
+                <label>Address</label><input type="text" id="in-address" required placeholder="Full address">
+
+                <div class="properties-page-footer">
+                    <button type="button" id="properties-page-cancel-btn" class="properties-page-btn-cancel">Cancel</button>
+                    <button type="submit" class="properties-page-btn-primary" id="submit-btn">Add</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <?php return ob_get_clean();
+});
+
+add_shortcode('properties_page_grid', function() {
+    ob_start(); ?>
+    <style>
+        .properties-dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .properties-dashboard-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .properties-dashboard-card:hover, .properties-dashboard-card.active {
+            border-color: #0a8a4f;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        .properties-dashboard-badge {
+            background: #f0fdf4;
+            color: #166534;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .properties-dashboard-address {
+            color: #64748b;
+            font-size: 14px;
+            margin: 8px 0;
+        }
+        .properties-dashboard-bar-bg {
+            background: #f1f5f9;
+            height: 8px;
+            border-radius: 4px;
+            margin: 12px 0;
+            overflow: hidden;
+        }
+        .properties-dashboard-bar-fill {
+            background: #0a8a4f;
+            height: 100%;
+        }
+        .properties-dashboard-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #f1f5f9;
+        }
+        .properties-dashboard-stat-item small {
+            display: block;
+            color: #64748b;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        .properties-dashboard-stat-item span {
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .properties-dashboard-actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+        .dashboard-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            border: 1px solid #e2e8f0;
+            background: #fff;
+        }
+        #properties-dashboard-wrapper {
+            display: block !important;
+            visibility: visible !important;
+            width: 100%;
+        }
+        @media (max-width: 768px) {
+            .properties-dashboard-grid {
+                grid-template-columns: 1fr !important;
+                display: block !important;
+                width: 100% !important;
+                min-height: 100px !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+            }
+            .properties-dashboard-card {
+                width: 100% !important;
+                display: block !important;
+                margin-bottom: 20px !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                border: 1px solid #e2e8f0 !important;
+                float: none !important;
+                clear: both !important;
+            }
+        }
+    </style>
+    <div id="properties-dashboard-wrapper">
+        <input type="hidden" id="ef_property_nonce" value="<?php echo wp_create_nonce('ef_property_nonce'); ?>">
+        <div id="properties-dashboard-grid" class="properties-dashboard-grid">
+            <div class="properties-page-empty-state"><p>Loading properties...</p></div>
+        </div>
+        <div class="properties-dashboard-nav">
+            <button id="prev-page" class="prop-nav-btn" disabled>Previous</button>
+            <span id="page-info">Page 1 of 1</span>
+            <button id="next-page" class="prop-nav-btn" disabled>Next</button>
+        </div>
+    </div>
+    <?php return ob_get_clean();
+});
+
+add_shortcode('properties_page_details', function() {
+    ob_start(); ?>
+    <style>
+
+.mobile-only-close {
+    display: none;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1001;
+    background: #fff;
+    border-radius: 50%;
+    width: 56px;
+    height: 56px;
+    line-height: 0px;
+    text-align: center;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    padding: 20px;
+    color: #0a8a4f;
+}
+
+        @media (max-width: 768px) {
+            .properties-page-sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: #fff;
+                z-index: 2000; /* Increased z-index */
+                display: none;
+                overflow-y: auto;
+                padding: 20px;
+                box-sizing: border-box;
+				margin-top: 0 !important; /* Removed 180px margin */
+            }
+            .properties-page-sidebar.active {
+                display: block;
+            }
+            .mobile-only-close {
+                display: block;
+            }
+        }
+    </style>
+    <aside class="properties-page-sidebar" id="properties-sidebar">
+        <button id="close-details-mobile" class="properties-page-close-btn mobile-only-close">&times;</button>
+        <div id="properties-page-details" class="properties-page-details-card">
+            <div class="properties-page-empty-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 21V5a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v5m-4 0h4"/>
+                </svg>
+                <p>Select a property to view details</p>
+            </div>
+        </div>
+    </aside>
+    <?php return ob_get_clean();
+});
+
+add_action('wp_footer', function() { ?>
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const grid = document.getElementById('properties-dashboard-grid');
+        if (!grid && !document.getElementById('properties-page-modal')) return;
+
+        const ajaxUrl = '<?php echo admin_url("admin-ajax.php"); ?>';
+
+        const modal = document.getElementById('properties-page-modal');
+        const trigger = document.getElementById('properties-page-add-trigger');
+        const closeBtn = document.getElementById('properties-page-close-btn');
+        const cancelBtn = document.getElementById('properties-page-cancel-btn');
+        const form = document.getElementById('properties-page-form');
+        const modalTitle = document.getElementById('modal-title');
+        const submitBtn = document.getElementById('submit-btn');
+
+        const toggleModal = () => {
+            if (!modal) return;
+            modal.classList.toggle('properties-page-hidden');
+            if (modal.classList.contains('properties-page-hidden')) {
+                document.body.style.overflow = '';
+                form.reset();
+                document.getElementById('in-id').value = '';
+                if(modalTitle) modalTitle.textContent = 'Add property';
+                if(submitBtn) submitBtn.textContent = 'Add';
+            } else {
+                document.body.style.overflow = 'hidden';
+            }
+        };
+
+        if(trigger) trigger.onclick = toggleModal;
+        if(closeBtn) closeBtn.onclick = toggleModal;
+        if(cancelBtn) cancelBtn.onclick = toggleModal;
+        if(modal) modal.addEventListener('click', (e) => { if (e.target === modal) toggleModal(); });
+
+        if (form) {
+            form.onsubmit = (e) => {
+                e.preventDefault();
+                const propertyId = document.getElementById('in-id').value;
+                const submitOriginalText = submitBtn.textContent;
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Saving...';
+
+                const data = new FormData();
+                data.append('action', 'save_property');
+                const nonceEl = document.getElementById('ef_property_nonce');
+                if (nonceEl) {
+                    data.append('nonce', nonceEl.value);
+                }
+                data.append('property_id', propertyId);
+                data.append('name', document.getElementById('in-name').value);
+                data.append('type', document.getElementById('in-type').value);
+                data.append('units', document.getElementById('in-units').value);
+                data.append('address', document.getElementById('in-address').value);
+
+                fetch(ajaxUrl, { method: 'POST', body: data })
+                .then(r => r.json()).then(res => {
+                    if(res.success) {
+                        location.reload();
+                    } else {
+                        alert(res.data || 'Failed to save property.');
+                        submitBtn.disabled = false;
+                        submitBtn.textContent = submitOriginalText;
+                    }
+                }).catch(err => {
+                    alert('Network error or session expired.');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = submitOriginalText;
+                });
+            };
+        }
+
+        let curPage = 1, allData = [];
+        const pageInfo = document.getElementById('page-info');
+        const prevBtn = document.getElementById('prev-page');
+        const nextBtn = document.getElementById('next-page');
+
+        const setActiveById = (id) => {
+            if (!grid) return;
+            Array.from(grid.querySelectorAll('.properties-dashboard-card')).forEach(c => c.classList.remove('active'));
+            const card = grid.querySelector(`.properties-dashboard-card[data-prop-id="${id}"]`);
+            if (card) card.classList.add('active');
+        };
+
+        const render = () => {
+            if (!grid) return;
+            const perPage = 4;
+            const totalPages = Math.ceil(allData.length / perPage) || 1;
+            const start = (curPage - 1) * perPage;
+            const slice = allData.slice(start, start + perPage);
+
+            if (slice.length === 0) {
+                grid.innerHTML = `<div class="properties-page-empty-state"><p>No properties found.</p></div>`;
+            } else {
+                grid.innerHTML = slice.map((p) => {
+                const occPct = p.units > 0 ? (p.occupied / p.units) * 100 : 0;
+                const colPct = p.expected > 0 ? Math.round((p.collected / p.expected) * 100) : 0;
+                const activeClass = (window._propertiesActiveId && window._propertiesActiveId == p.id) ? 'active' : '';
+
+                return `
+                <div class="properties-dashboard-card ${activeClass}" role="button" tabindex="0" data-prop-id="${p.id}">
+                    <div class="properties-dashboard-header"><span class="properties-dashboard-badge">${p.type}</span></div>
+                    <h3>${p.name}</h3>
+                    <p class="properties-dashboard-address">${p.address}</p>
+                    <div class="properties-dashboard-occ"><span>Occupancy</span><span>${p.occupied} / ${p.units}</span></div>
+                    <div class="properties-dashboard-bar-bg"><div class="properties-dashboard-bar-fill" style="width: ${occPct}%"></div></div>
+                    <div class="properties-dashboard-stats">
+                        <div class="properties-dashboard-stat-item"><small>Expected</small><span>AED ${p.expected.toLocaleString()}</span></div>
+                        <div class="properties-dashboard-stat-item"><small>Collected</small><span class="properties-dashboard-collected">AED ${p.collected.toLocaleString()} (${colPct}%)</span></div>
+                    </div>
+                    <div class="properties-dashboard-actions">
+                        <button class="dashboard-btn edit-btn" data-id="${p.id}">✏️ Edit</button>
+                        <button class="dashboard-btn delete-btn" data-id="${p.id}">🗑 Delete</button>
+                    </div>
+                </div>`;
+                }).join('');
+            }
+
+            Array.from(grid.querySelectorAll('.properties-dashboard-card')).forEach(card => {
+                card.onclick = (e) => {
+                    if (e.target.closest('.dashboard-btn')) return;
+                    const id = card.getAttribute('data-prop-id');
+                    const propData = allData.find(p => p.id == id);
+                    window._propertiesActiveId = id;
+                    setActiveById(id);
+                    window.dispatchEvent(new CustomEvent('showPropertyDetails', { detail: propData }));
+                };
+            });
+
+            Array.from(grid.querySelectorAll('.edit-btn')).forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const id = btn.getAttribute('data-id');
+                    const p = allData.find(item => item.id == id);
+                    if (p && modal) {
+                        document.getElementById('in-id').value = p.id;
+                        document.getElementById('in-name').value = p.name;
+                        document.getElementById('in-type').value = p.type;
+                        document.getElementById('in-units').value = p.units;
+                        document.getElementById('in-address').value = p.address;
+                        if(modalTitle) modalTitle.textContent = 'Edit property';
+                        if(submitBtn) submitBtn.textContent = 'Save Changes';
+                        modal.classList.remove('properties-page-hidden');
+                        document.body.style.overflow = 'hidden';
+                    }
+                };
+            });
+
+            Array.from(grid.querySelectorAll('.delete-btn')).forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    if (confirm('Delete this property?')) {
+                        const id = btn.getAttribute('data-id');
+                        const data = new FormData();
+                        data.append('action', 'delete_property');
+                        const nonceEl = document.getElementById('ef_property_nonce');
+                        if (nonceEl) {
+                            data.append('nonce', nonceEl.value);
+                        }
+                        data.append('property_id', id);
+                        fetch(ajaxUrl, { method: 'POST', body: data })
+                        .then(r => r.json()).then(res => {
+                            if (res.success) location.reload();
+                            else alert(res.data || 'Failed to delete.');
+                        });
+                    }
+                };
+            });
+
+            if(pageInfo) pageInfo.textContent = `Page ${curPage} of ${totalPages}`;
+            if(prevBtn) prevBtn.disabled = curPage === 1;
+            if(nextBtn) nextBtn.disabled = curPage >= totalPages;
+        };
+
+                const dashboardData = new FormData();
+                dashboardData.append('action', 'get_properties_dashboard');
+                const nonceEl = document.getElementById('ef_property_nonce');
+                if (nonceEl) {
+                    dashboardData.append('nonce', nonceEl.value);
+                } else {
+                    console.error('Property nonce missing.');
+                    return;
+                }
+
+                fetch(ajaxUrl, { method: 'POST', body: dashboardData })
+                .then(r => r.json())
+                .then(res => {
+                    if(res.success) {
+                        allData = res.data;
+                        render();
+                    } else {
+                        if (grid) {
+                            grid.innerHTML = `<div class="properties-page-empty-state"><p>Error loading properties: ${res.data || 'Unknown error'}</p></div>`;
+                        }
+                    }
+                })
+                .catch(err => {
+                    console.error('Fetch error:', err);
+                    if (grid) {
+                        grid.innerHTML = `<div class="properties-page-empty-state"><p>Network error loading properties.</p></div>`;
+                    }
+                });
+
+        if(prevBtn) prevBtn.onclick = () => { if (curPage>1) { curPage--; render(); } };
+        if(nextBtn) nextBtn.onclick = () => { curPage++; render(); };
+
+        const detailsContainer = document.getElementById('properties-page-details');
+        const sidebar = document.getElementById('properties-sidebar');
+        const closeDetailsMobile = document.getElementById('close-details-mobile');
+        const fmtMoney = amount => 'AED ' + (parseFloat(amount) || 0).toLocaleString('en-AE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+        if (closeDetailsMobile && sidebar) {
+            closeDetailsMobile.onclick = () => {
+                sidebar.classList.remove('active');
+                if (window.innerWidth <= 768) {
+                    document.body.style.overflow = '';
+                }
+            };
+        }
+
+        window.addEventListener('showPropertyDetails', async (e) => {
+            const prop = e.detail;
+            if (!prop || !detailsContainer) return;
+
+            if (sidebar) {
+                sidebar.classList.add('active');
+                if (window.innerWidth <= 768) {
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+            detailsContainer.innerHTML = `<div class="properties-page-empty-state"><p>Loading...</p></div>`;
+
+            const tenantData = new FormData();
+            tenantData.append('action', 'get_property_tenants_simple');
+            const nonceEl = document.getElementById('ef_property_nonce');
+            if (nonceEl) {
+                tenantData.append('nonce', nonceEl.value);
+            }
+            tenantData.append('property_id', prop.id);
+
+            const tenants = await fetch(ajaxUrl, { method: 'POST', body: tenantData })
+                            .then(r => r.json()).then(res => res.success ? res.data : [])
+                            .catch(() => []);
+
+            const available = Math.max(0, prop.units - prop.occupied);
+            const isAvailable = prop.occupied < prop.units;
+            const colPct = prop.expected > 0 ? Math.round((prop.collected / prop.expected) * 100) : 0;
+
+            const tenantsHtml = tenants.length
+                ? tenants.map(t => `
+                    <div style="padding:12px;background:#f9fafb;border-radius:8px;margin-bottom:10px;border:1px solid #e5e7eb;">
+                        <div style="display:flex; justify-content:space-between;">
+                            <div><strong>${t.name}</strong><br><span style="font-size:12px;color:#6b7280;">${t.address}</span></div>
+                            <div style="text-align:right;"><span style="color:#0a8a4f;font-weight:600;">${fmtMoney(t.rent)}</span></div>
+                        </div>
+                    </div>
+                `).join('')
+                : `<div style="padding:20px;text-align:center;color:#9ca3af;font-size:14px;">No tenants</div>`;
+
+            detailsContainer.innerHTML = `
+                <h2 style="margin:0 0 5px 0;font-size:22px;">${prop.name}</h2>
+                <p style="margin:0 0 20px 0;font-size:14px;color:#6b7280;">${prop.address || 'No address'}</p>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
+                    <div style="background:#f9fafb;padding:12px;border-radius:8px;border:1px solid #e5e7eb;">
+                        <small style="color:#6b7280;text-transform:uppercase;font-size:10px;">Status</small>
+                        <div style="font-weight:600;">${isAvailable ? '<span class="property-available">Available</span>' : '<span class="property-not-available">Full</span>'}</div>
+                    </div>
+                    <div style="background:#f9fafb;padding:12px;border-radius:8px;border:1px solid #e5e7eb;">
+                        <small style="color:#6b7280;text-transform:uppercase;font-size:10px;">Total Units</small>
+                        <div style="font-weight:600;">${prop.units}</div>
+                    </div>
+                    <div style="background:#f9fafb;padding:12px;border-radius:8px;border:1px solid #e5e7eb;">
+                        <small style="color:#6b7280;text-transform:uppercase;font-size:10px;">Occupied</small>
+                        <div style="font-weight:600;color:#dc2626;">${prop.occupied}</div>
+                    </div>
+                    <div style="background:#f9fafb;padding:12px;border-radius:8px;border:1px solid #e5e7eb;">
+                        <small style="color:#6b7280;text-transform:uppercase;font-size:10px;">Available</small>
+                        <div style="font-weight:600;color:#059669;">${available}</div>
+                    </div>
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;">
+                    <div style="background:#f9fafb;padding:12px;border-radius:8px;border:1px solid #e5e7eb;">
+                        <small style="color:#6b7280;text-transform:uppercase;font-size:10px;">Expected</small>
+                        <div style="font-size:16px;font-weight:700;">${fmtMoney(prop.expected)}</div>
+                    </div>
+                    <div style="background:#f9fafb;padding:12px;border-radius:8px;border:1px solid #e5e7eb;">
+                        <small style="color:#6b7280;text-transform:uppercase;font-size:10px;">Collected</small>
+                        <div style="font-size:16px;font-weight:700;color:#0a8a4f;">${fmtMoney(prop.collected)} (${colPct}%)</div>
+                    </div>
+                </div>
+
+                <h3 style="font-size:16px;margin-bottom:10px;">Tenants (${prop.occupied})</h3>
+                <div style="max-height:300px;overflow-y:auto;">${tenantsHtml}</div>
+            `;
+        });
+    });
+    </script>
+<?php });
