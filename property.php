@@ -1,3 +1,4 @@
+<?php
 add_action('wp_ajax_save_property', 'ef_handle_save_property');
 
 if (!function_exists('ef_handle_save_property')) {

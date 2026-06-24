@@ -1,3 +1,4 @@
+<?php
 add_shortcode('ef_log_payment_btn', function() {   
     $tenants_query = new WP_Query([   
         'post_type'      => 'ef_tenant',   
@@ -31,13 +32,21 @@ add_shortcode('ef_log_payment_btn', function() {
                     if ($tenants_query->have_posts()) {   
                         while ($tenants_query->have_posts()) {   
                             $tenants_query->the_post();   
-                            echo '<option value="'.get_the_ID().'">'.get_the_title().'</option>';   
+                            $tid = get_the_ID();
+                            $rent = get_field('monthly_rent', $tid) ?: get_post_meta($tid, 'monthly_rent', true);
+                            $due  = get_field('rent_due_day', $tid) ?: get_post_meta($tid, 'rent_due_day', true);
+                            echo '<option value="'.$tid.'" data-rent="'.esc_attr($rent).'" data-due="'.esc_attr($due).'">'.get_the_title().'</option>';
                         }   
                         wp_reset_postdata();   
                     }   
                     ?>   
                 </select>   
             </div>   
+
+            <div class="ef-modal-input-field-group">
+                <label>Transaction/Cheque Number</label>
+                <input type="text" id="ef_log_transaction_cheque_number" placeholder="Enter Reference Number" class="ef-modal-element-input">
+            </div>
    
             <div class="ef-input-flex-row-2col">   
                 <div class="ef-modal-input-field-group" style="margin-bottom:0;">   
@@ -58,7 +67,7 @@ add_shortcode('ef_log_payment_btn', function() {
             <div class="ef-input-flex-row-2col">   
                 <div class="ef-modal-input-field-group" style="margin-bottom:0;">   
                     <label>Period (YYYY-MM)</label>   
-                    <input type="text" id="ef_log_period" value="<?php echo date('Y-m'); ?>" placeholder="e.g. 2026-05" class="ef-modal-element-input">   
+                    <input type="text" id="ef_log_period" value="<?php echo date('Y-m-d'); ?>" placeholder="YYYY-MM-DD" class="ef-modal-element-input">
                 </div>   
                 <div class="ef-modal-input-field-group" style="margin-bottom:0;">   
                     <label>Date</label>   
@@ -83,14 +92,41 @@ add_shortcode('ef_log_payment_btn', function() {
     </div>   
    
     <script>   
+    document.addEventListener('DOMContentLoaded', function() {
+        const tenantSelect = document.getElementById('ef_log_tenant');
+        if (tenantSelect) {
+            tenantSelect.onchange = function() {
+                const selected = this.selectedOptions[0];
+                const rent = selected?.dataset.rent;
+                const due = selected?.dataset.due;
+                const amountInput = document.getElementById('ef_log_amount');
+                if (rent && rent > 0) {
+                    amountInput.placeholder = 'Rent: ' + Number(rent).toLocaleString();
+                } else {
+                    amountInput.placeholder = 'Enter Amount';
+                }
+
+                if (due && !document.getElementById('ef_log_payment_id').value) {
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    const day = String(due).padStart(2, '0');
+                    document.getElementById('ef_log_period').value = `${year}-${month}-${day}`;
+                }
+            };
+        }
+    });
+
     function efOpenLogPaymentModal() { 
         document.getElementById('efModalTitle').innerText = 'Log a payment'; 
         document.getElementById('efSubmitBtn').innerText = 'Log payment'; 
         document.getElementById('ef_log_payment_id').value = ''; 
         document.getElementById('ef_log_tenant').value = ''; 
         document.getElementById('ef_log_amount').value = ''; 
+        document.getElementById('ef_log_amount').placeholder = 'Enter Amount';
         document.getElementById('ef_log_method').value = 'Bank Transfer'; 
-        document.getElementById('ef_log_period').value = '<?php echo date('Y-m'); ?>'; 
+        document.getElementById('ef_log_transaction_cheque_number').value = '';
+        document.getElementById('ef_log_period').value = '<?php echo date('Y-m-d'); ?>';
         document.getElementById('ef_log_date').value = '<?php echo date('Y-m-d'); ?>'; 
         document.getElementById('efLogPaymentGlobalModal').style.display = 'flex'; 
     } 
@@ -100,6 +136,7 @@ add_shortcode('ef_log_payment_btn', function() {
         const tenant = document.getElementById('ef_log_tenant').value;   
         const amount = document.getElementById('ef_log_amount').value;   
         const method = document.getElementById('ef_log_method').value;   
+        const transaction_cheque_number = document.getElementById('ef_log_transaction_cheque_number').value;
         const date = document.getElementById('ef_log_date').value;   
         const period = document.getElementById('ef_log_period').value;   
    
@@ -115,6 +152,7 @@ add_shortcode('ef_log_payment_btn', function() {
         fd.append('tenant_id', tenant);   
         fd.append('amount', amount);   
         fd.append('method', method);   
+        fd.append('transaction_cheque_number', transaction_cheque_number);
         fd.append('date', date);   
         fd.append('period', period);   
    
@@ -149,16 +187,18 @@ function ef_callback_ajax_create_payment() {
     $tenant_id  = isset($_POST['tenant_id']) ? intval($_POST['tenant_id']) : 0;   
     $amount     = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;   
     $method     = isset($_POST['method']) ? sanitize_text_field($_POST['method']) : 'Bank Transfer';   
+    $transaction_cheque_number = isset($_POST['transaction_cheque_number']) ? sanitize_text_field($_POST['transaction_cheque_number']) : '';
     $date       = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';   
     $period     = isset($_POST['period']) ? sanitize_text_field($_POST['period']) : ''; // YYYY-MM
    
     if (!$tenant_id || !$amount || !$date || !$period) {   
         wp_send_json_error(['message' => 'Operational parameters data validation failure.']);   
     }   
+
    
     $tenant_name = get_the_title($tenant_id);   
     $post_title  = $tenant_name . ' - ' . date('M Y', strtotime($date));   
-    $post_date   = $period . '-01 00:00:00';
+    $post_date   = (strlen($period) === 7 ? $period . '-01' : $period) . ' 00:00:00';
    
     $new_payment_id = wp_insert_post([   
         'post_title'  => $post_title,   
@@ -169,11 +209,31 @@ function ef_callback_ajax_create_payment() {
     ]);   
    
     if($new_payment_id && !is_wp_error($new_payment_id)) {   
+        // Calculate next receipt voucher number
+        $last_payments = get_posts([
+            'post_type'      => 'payment',
+            'post_status'    => ['publish', 'future'],
+            'posts_per_page' => 1,
+            'meta_key'       => 'receipt_voucher',
+            'orderby'        => 'meta_value_num',
+            'order'          => 'DESC',
+            'post__not_in'   => [$new_payment_id]
+        ]);
+
+        $next_voucher_int = 1;
+        if (!empty($last_payments)) {
+            $last_voucher = get_post_meta($last_payments[0]->ID, 'receipt_voucher', true);
+            $next_voucher_int = intval($last_voucher) + 1;
+        }
+        $receipt_voucher = str_pad($next_voucher_int, 3, '0', STR_PAD_LEFT);
+
         $meta = [
             'associated_tenant' => $tenant_id,
             'amount_paid'       => $amount,
             'date_of_payment'   => $date,
             'mode_of_payment'   => $method,
+            'transaction_cheque_number' => $transaction_cheque_number,
+            'receipt_voucher'   => $receipt_voucher,
             'payment_period'    => $period
         ];
         foreach ($meta as $k => $v) {
@@ -198,16 +258,18 @@ function ef_callback_ajax_update_payment() {
     $tenant_id  = isset($_POST['tenant_id']) ? intval($_POST['tenant_id']) : 0;   
     $amount     = isset($_POST['amount']) ? floatval($_POST['amount']) : 0;   
     $method     = isset($_POST['method']) ? sanitize_text_field($_POST['method']) : 'Bank Transfer';   
+    $transaction_cheque_number = isset($_POST['transaction_cheque_number']) ? sanitize_text_field($_POST['transaction_cheque_number']) : '';
     $date       = isset($_POST['date']) ? sanitize_text_field($_POST['date']) : '';   
     $period     = isset($_POST['period']) ? sanitize_text_field($_POST['period']) : ''; // YYYY-MM
    
     if (!$payment_id || !$tenant_id || !$amount || !$date || !$period) {   
         wp_send_json_error(['message' => 'Operational parameters data validation failure.']);   
     }   
+
    
     $tenant_name = get_the_title($tenant_id);   
     $post_title  = $tenant_name . ' - ' . date('M Y', strtotime($date));   
-    $post_date   = $period . '-01 00:00:00';
+    $post_date   = (strlen($period) === 7 ? $period . '-01' : $period) . ' 00:00:00';
    
     $updated_payment_id = wp_update_post([ 
         'ID'          => $payment_id, 
@@ -222,6 +284,7 @@ function ef_callback_ajax_update_payment() {
             'amount_paid'       => $amount,
             'date_of_payment'   => $date,
             'mode_of_payment'   => $method,
+            'transaction_cheque_number' => $transaction_cheque_number,
             'payment_period'    => $period
         ];
         foreach ($meta as $k => $v) {
@@ -264,7 +327,7 @@ add_shortcode('ef_payments_stats', function() {
     $this_month_revenue = 0.00;   
     $month_query = new WP_Query([   
         'post_type'      => 'payment',   
-        'post_status'    => 'publish',   
+        'post_status'    => ['publish', 'future'],
         'posts_per_page' => -1,   
         'date_query'     => [   
             [   
@@ -340,7 +403,7 @@ $methods_list = ['Bank Transfer', 'Cash', 'Cheque', 'Card Payment'];
    
 $query = new WP_Query([     
     'post_type'      => 'payment',     
-    'post_status'    => 'publish',     
+    'post_status'    => ['publish', 'future'],
     'posts_per_page' => -1,     
     'meta_key'       => 'date_of_payment',     
     'orderby'        => 'meta_value',     
@@ -356,7 +419,9 @@ if ($query->have_posts()) {
         $amount     = get_field('amount_paid', $payment_id) ?: get_post_meta($payment_id, 'amount_paid', true);     
         $raw_date   = get_field('date_of_payment', $payment_id) ?: get_post_meta($payment_id, 'date_of_payment', true);     
         $method     = get_field('mode_of_payment', $payment_id) ?: get_post_meta($payment_id, 'mode_of_payment', true);     
-   
+        $transaction_cheque_number = get_field('transaction_cheque_number', $payment_id) ?: get_post_meta($payment_id, 'transaction_cheque_number', true);
+        $receipt_voucher = get_field('receipt_voucher', $payment_id) ?: get_post_meta($payment_id, 'receipt_voucher', true);
+
         $amount_val   = $amount ? floatval($amount) : 0.00;     
         $method_txt   = $method ? $method : 'Bank Transfer';     
          
@@ -368,20 +433,21 @@ if ($query->have_posts()) {
             } 
         } 
    
-        $property_name = $tenant_id ? (get_field('property_unit_name', $tenant_id) ?: get_post_meta($tenant_id, 'property_unit_name', true)) : '';     
-        if (!$property_name) {     
-            $property_name = 'Lakeside Residences';      
-        }     
+        $property_id = $tenant_id ? (get_field('property_id', $tenant_id) ?: get_post_meta($tenant_id, 'property_id', true)) : 0;
+        $property_name = $property_id ? get_the_title($property_id) : 'Lakeside Residences';
    
+        $period_val = get_field('payment_period', $payment_id) ?: get_post_meta($payment_id, 'payment_period', true);
+        if (!$period_val) {
+            $period_val = get_the_date('Y-m', $payment_id);
+        }
+
         if ($raw_date) {     
             $timestamp   = strtotime($raw_date);     
             $date_format = date('n/j/Y', $timestamp);     
             $iso_date    = date('Y-m-d', $timestamp); 
-            $period_val  = date('Y-m', $timestamp);     
         } else {     
             $date_format = get_the_date('n/j/Y', $payment_id);     
             $iso_date    = get_the_date('Y-m-d', $payment_id); 
-            $period_val  = get_the_date('Y-m', $payment_id);     
         }     
    
         if ($tenant_id && $tenant_name !== 'Out of contract' && !in_array($tenant_name, $unique_tenants)) {     
@@ -398,6 +464,8 @@ if ($query->have_posts()) {
             'property'  => $property_name,     
             'period'    => $period_val,     
             'method'    => $method_txt,     
+            'transaction_cheque_number' => $transaction_cheque_number,
+            'receipt_voucher' => $receipt_voucher,
             'date'      => $date_format, 
             'raw_date'  => $iso_date, 
             'amount'    => $amount_val     
@@ -451,7 +519,7 @@ ob_start();
 <div class="ef-ledger-table-wrapper">     
     <div class="ef-ledger-control-bar">     
         <div class="ef-ledger-search-box-holder">     
-            <input type="text" id="efLedgerInputSearch" oninput="efProcessLedgerQueryMatrix()" placeholder="Search tenant, property, method...">     
+            <input type="text" id="efLedgerInputSearch" oninput="efProcessLedgerQueryMatrix()" placeholder="Search tenant, property, method, ref...">
         </div>     
    
         <select id="efLedgerSelectTenant" onchange="efProcessLedgerQueryMatrix()" class="ef-ledger-select-filter">     
@@ -487,6 +555,7 @@ ob_start();
                 <th>Property</th>     
                 <th>Period</th>     
                 <th>Method</th>     
+                <th>Ref/Cheque</th>
                 <th>Date</th>     
                 <th>Amount</th>     
                 <th style="text-align: right;">Actions</th>     
@@ -524,7 +593,8 @@ function efProcessLedgerQueryMatrix() {
         const matchSearch = !queryStr ||      
                             entry.tenant.toLowerCase().includes(queryStr) ||      
                             entry.property.toLowerCase().includes(queryStr) ||      
-                            entry.method.toLowerCase().includes(queryStr);     
+                            entry.method.toLowerCase().includes(queryStr) ||
+                            (entry.transaction_cheque_number && entry.transaction_cheque_number.toLowerCase().includes(queryStr));
    
         const matchTenant = !selTenant || entry.tenant === selTenant;     
         const matchMethod = !selMethod || entry.method === selMethod;     
@@ -543,6 +613,7 @@ function efProcessLedgerQueryMatrix() {
                 <td style="color: #475569;">${efEscapeOutputChar(entry.property)}</td>     
                 <td><span class="ef-badge-pill-period">${efEscapeOutputChar(entry.period)}</span></td>     
                 <td style="color: #475569;">${efEscapeOutputChar(entry.method)}</td>     
+                <td style="color: #475569;">${efEscapeOutputChar(entry.transaction_cheque_number)}</td>
                 <td style="color: #475569;">${efEscapeOutputChar(entry.date)}</td>     
                 <td class="ef-cell-accent-currency-green">AED ${Number(entry.amount).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</td>     
                 <td style="text-align: right;">     
@@ -588,8 +659,10 @@ function efEditTransaction(id) {
     document.getElementById('efSubmitBtn').innerText = 'Update payment'; 
     document.getElementById('ef_log_payment_id').value = entry.id; 
     document.getElementById('ef_log_tenant').value = entry.tenant_id; 
+    document.getElementById('ef_log_tenant').dispatchEvent(new Event('change'));
     document.getElementById('ef_log_amount').value = entry.amount; 
     document.getElementById('ef_log_method').value = entry.method; 
+    document.getElementById('ef_log_transaction_cheque_number').value = entry.transaction_cheque_number || '';
     document.getElementById('ef_log_period').value = entry.period; 
     document.getElementById('ef_log_date').value = entry.raw_date; 
  
@@ -622,12 +695,13 @@ function efDownloadReceipt(d) {
         return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");  
     };  
   
-    const ref = d.ref || ('REC-' + String(d.id).padStart(6, '0'));  
+    const ref = d.receipt_voucher || d.ref || ('REC-' + String(d.id).padStart(6, '0'));
     const tenant = d.tenant || 'Unknown';  
     const prop = d.property || d.prop || 'N/A';  
     const date = d.date || '';  
     const period = d.period || '';  
     const method = d.method || '';  
+    const cheque = d.transaction_cheque_number || '';
     const amount = d.amount_formatted || (typeof d.amount === 'number' ? d.amount.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) : d.amount);  
   
     const wrapper = document.createElement('div');  
@@ -660,6 +734,7 @@ function efDownloadReceipt(d) {
                 <div style="text-align:right; min-width:240px;">   
                     <div style="color:#94a3b8; font-size:11px; font-weight:700; text-transform:uppercase; margin-bottom:12px; letter-spacing:0.5px;">Transaction Details</div>   
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; font-size:13px; text-align:left;">   
+                        <span style="color:#64748b; font-weight:600;">Ref/Cheque:</span><span style="text-align:right; font-weight:700; color:#0f172a;">${esc(cheque)}</span>
                         <span style="color:#64748b; font-weight:600;">Payment Date:</span><span style="text-align:right; font-weight:700; color:#0f172a;">${esc(date)}</span>   
                         <span style="color:#64748b; font-weight:600;">Allocation Period:</span><span style="text-align:right; font-weight:700; color:#0f172a;">${esc(period)}</span>   
                         <span style="color:#64748b; font-weight:600;">Method:</span><span style="text-align:right; font-weight:700; color:#0f172a;">${esc(method)}</span>   
