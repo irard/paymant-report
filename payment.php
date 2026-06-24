@@ -183,6 +183,24 @@ function ef_callback_ajax_create_payment() {
     if (!$tenant_id || !$amount || !$date || !$period) {   
         wp_send_json_error(['message' => 'Operational parameters data validation failure.']);   
     }   
+
+    if (!empty($transaction_cheque_number)) {
+        $existing = get_posts([
+            'post_type'  => 'payment',
+            'meta_query' => [
+                [
+                    'key'   => 'transaction_cheque_number',
+                    'value' => $transaction_cheque_number,
+                    'compare' => '='
+                ]
+            ],
+            'posts_per_page' => 1,
+            'fields' => 'ids'
+        ]);
+        if (!empty($existing)) {
+            wp_send_json_error(['message' => 'The transaction/cheque number already exists in the records.']);
+        }
+    }
    
     $tenant_name = get_the_title($tenant_id);   
     $post_title  = $tenant_name . ' - ' . date('M Y', strtotime($date));   
@@ -253,6 +271,25 @@ function ef_callback_ajax_update_payment() {
     if (!$payment_id || !$tenant_id || !$amount || !$date || !$period) {   
         wp_send_json_error(['message' => 'Operational parameters data validation failure.']);   
     }   
+
+    if (!empty($transaction_cheque_number)) {
+        $existing = get_posts([
+            'post_type'  => 'payment',
+            'meta_query' => [
+                [
+                    'key'   => 'transaction_cheque_number',
+                    'value' => $transaction_cheque_number,
+                    'compare' => '='
+                ]
+            ],
+            'posts_per_page' => 1,
+            'fields' => 'ids',
+            'post__not_in' => [$payment_id]
+        ]);
+        if (!empty($existing)) {
+            wp_send_json_error(['message' => 'The transaction/cheque number already exists in the records.']);
+        }
+    }
    
     $tenant_name = get_the_title($tenant_id);   
     $post_title  = $tenant_name . ' - ' . date('M Y', strtotime($date));   
