@@ -1,3 +1,4 @@
+<?php
 if ( ! defined( "ABSPATH" ) ) exit; 
 
 add_shortcode('add_tenant', function(){ 

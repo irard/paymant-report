@@ -1,3 +1,4 @@
+<?php
 add_shortcode('ef_log_payment_btn', function() {   
     $tenants_query = new WP_Query([   
         'post_type'      => 'ef_tenant',   
@@ -31,7 +32,9 @@ add_shortcode('ef_log_payment_btn', function() {
                     if ($tenants_query->have_posts()) {   
                         while ($tenants_query->have_posts()) {   
                             $tenants_query->the_post();   
-                            echo '<option value="'.get_the_ID().'">'.get_the_title().'</option>';   
+                            $tid = get_the_ID();
+                            $rent = get_field('monthly_rent', $tid) ?: get_post_meta($tid, 'monthly_rent', true);
+                            echo '<option value="'.$tid.'" data-rent="'.esc_attr($rent).'">'.get_the_title().'</option>';
                         }   
                         wp_reset_postdata();   
                     }   
@@ -83,12 +86,28 @@ add_shortcode('ef_log_payment_btn', function() {
     </div>   
    
     <script>   
+    document.addEventListener('DOMContentLoaded', function() {
+        const tenantSelect = document.getElementById('ef_log_tenant');
+        if (tenantSelect) {
+            tenantSelect.onchange = function() {
+                const rent = this.selectedOptions[0]?.dataset.rent;
+                const amountInput = document.getElementById('ef_log_amount');
+                if (rent && rent > 0) {
+                    amountInput.placeholder = 'Rent: ' + Number(rent).toLocaleString();
+                } else {
+                    amountInput.placeholder = 'Enter Amount';
+                }
+            };
+        }
+    });
+
     function efOpenLogPaymentModal() { 
         document.getElementById('efModalTitle').innerText = 'Log a payment'; 
         document.getElementById('efSubmitBtn').innerText = 'Log payment'; 
         document.getElementById('ef_log_payment_id').value = ''; 
         document.getElementById('ef_log_tenant').value = ''; 
         document.getElementById('ef_log_amount').value = ''; 
+        document.getElementById('ef_log_amount').placeholder = 'Enter Amount';
         document.getElementById('ef_log_method').value = 'Bank Transfer'; 
         document.getElementById('ef_log_period').value = '<?php echo date('Y-m'); ?>'; 
         document.getElementById('ef_log_date').value = '<?php echo date('Y-m-d'); ?>'; 
@@ -368,10 +387,8 @@ if ($query->have_posts()) {
             } 
         } 
    
-        $property_name = $tenant_id ? (get_field('property_unit_name', $tenant_id) ?: get_post_meta($tenant_id, 'property_unit_name', true)) : '';     
-        if (!$property_name) {     
-            $property_name = 'Lakeside Residences';      
-        }     
+        $property_id = $tenant_id ? (get_field('property_id', $tenant_id) ?: get_post_meta($tenant_id, 'property_id', true)) : 0;
+        $property_name = $property_id ? get_the_title($property_id) : 'Lakeside Residences';
    
         if ($raw_date) {     
             $timestamp   = strtotime($raw_date);     
@@ -588,6 +605,7 @@ function efEditTransaction(id) {
     document.getElementById('efSubmitBtn').innerText = 'Update payment'; 
     document.getElementById('ef_log_payment_id').value = entry.id; 
     document.getElementById('ef_log_tenant').value = entry.tenant_id; 
+    document.getElementById('ef_log_tenant').dispatchEvent(new Event('change'));
     document.getElementById('ef_log_amount').value = entry.amount; 
     document.getElementById('ef_log_method').value = entry.method; 
     document.getElementById('ef_log_period').value = entry.period; 
