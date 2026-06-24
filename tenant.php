@@ -126,7 +126,7 @@ $tenant_list_logic = function() {
                     $addr=$pid?(get_field('add_address',$pid)?:get_post_meta($pid,'add_address',true)?:get_the_title($pid)):'No Address'; 
                     $paid_this_month = 0.00; 
                     $current_month=date('m'); $current_year=date('Y');
-                    $p_query = new WP_Query(['post_type'=>$payment_post_type,'post_status'=>'publish','posts_per_page'=>-1,'date_query'=>[['year'=>$current_year,'month'=>$current_month]],'meta_query'=>[['key'=>$tenant_meta_key,'value'=>$tid,'compare'=>'=']]]); 
+                    $p_query = new WP_Query(['post_type'=>$payment_post_type,'post_status'=>['publish', 'future'],'posts_per_page'=>-1,'date_query'=>[['year'=>$current_year,'month'=>$current_month]],'meta_query'=>[['key'=>$tenant_meta_key,'value'=>$tid,'compare'=>'=']]]);
                     if($p_query->have_posts()){ while($p_query->have_posts()){$p_query->the_post(); $p_id = get_the_ID(); $paid_this_month+=floatval(get_field('amount_paid',$p_id) ?: get_post_meta($p_id, 'amount_paid', true));}wp_reset_postdata();} 
                     $initials=''; $words=explode(' ', $name); foreach($words as $w) $initials.=strtoupper(substr($w,0,1)); 
                 ?> 
@@ -667,7 +667,7 @@ function eftm_handle_ajax_tenant_breakdown() {
     $property_display = $propId ? get_the_title($propId) : 'No Property Assigned'; 
     $payment_history = []; 
     $p_query = new WP_Query([ 
-        'post_type'      => 'payment', 'post_status'    => 'publish', 'posts_per_page' => -1, 
+        'post_type'      => 'payment', 'post_status'    => ['publish', 'future'], 'posts_per_page' => -1,
         'meta_query'     => [['key' => 'associated_tenant', 'value' => $tenant_id, 'compare' => '=']], 
         'meta_key'       => 'date_of_payment', 'orderby' => 'meta_value', 'order' => 'DESC' 
     ]); 

@@ -67,7 +67,7 @@ add_shortcode('ef_log_payment_btn', function() {
             <div class="ef-input-flex-row-2col">   
                 <div class="ef-modal-input-field-group" style="margin-bottom:0;">   
                     <label>Period (YYYY-MM)</label>   
-                    <input type="text" id="ef_log_period" value="<?php echo date('Y-m'); ?>" placeholder="e.g. 2026-05" class="ef-modal-element-input">   
+                    <input type="text" id="ef_log_period" value="<?php echo date('Y-m-d'); ?>" placeholder="YYYY-MM-DD" class="ef-modal-element-input">
                 </div>   
                 <div class="ef-modal-input-field-group" style="margin-bottom:0;">   
                     <label>Date</label>   
@@ -106,7 +106,7 @@ add_shortcode('ef_log_payment_btn', function() {
                     amountInput.placeholder = 'Enter Amount';
                 }
 
-                if (due) {
+                if (due && !document.getElementById('ef_log_payment_id').value) {
                     const now = new Date();
                     const year = now.getFullYear();
                     const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -126,7 +126,7 @@ add_shortcode('ef_log_payment_btn', function() {
         document.getElementById('ef_log_amount').placeholder = 'Enter Amount';
         document.getElementById('ef_log_method').value = 'Bank Transfer'; 
         document.getElementById('ef_log_transaction_cheque_number').value = '';
-        document.getElementById('ef_log_period').value = '<?php echo date('Y-m'); ?>'; 
+        document.getElementById('ef_log_period').value = '<?php echo date('Y-m-d'); ?>';
         document.getElementById('ef_log_date').value = '<?php echo date('Y-m-d'); ?>'; 
         document.getElementById('efLogPaymentGlobalModal').style.display = 'flex'; 
     } 
@@ -195,23 +195,6 @@ function ef_callback_ajax_create_payment() {
         wp_send_json_error(['message' => 'Operational parameters data validation failure.']);   
     }   
 
-    if (!empty($transaction_cheque_number)) {
-        $existing = get_posts([
-            'post_type'  => 'payment',
-            'meta_query' => [
-                [
-                    'key'   => 'transaction_cheque_number',
-                    'value' => $transaction_cheque_number,
-                    'compare' => '='
-                ]
-            ],
-            'posts_per_page' => 1,
-            'fields' => 'ids'
-        ]);
-        if (!empty($existing)) {
-            wp_send_json_error(['message' => 'The transaction/cheque number already exists in the records.']);
-        }
-    }
    
     $tenant_name = get_the_title($tenant_id);   
     $post_title  = $tenant_name . ' - ' . date('M Y', strtotime($date));   
@@ -229,7 +212,7 @@ function ef_callback_ajax_create_payment() {
         // Calculate next receipt voucher number
         $last_payments = get_posts([
             'post_type'      => 'payment',
-            'post_status'    => 'publish',
+            'post_status'    => ['publish', 'future'],
             'posts_per_page' => 1,
             'meta_key'       => 'receipt_voucher',
             'orderby'        => 'meta_value_num',
@@ -283,24 +266,6 @@ function ef_callback_ajax_update_payment() {
         wp_send_json_error(['message' => 'Operational parameters data validation failure.']);   
     }   
 
-    if (!empty($transaction_cheque_number)) {
-        $existing = get_posts([
-            'post_type'  => 'payment',
-            'meta_query' => [
-                [
-                    'key'   => 'transaction_cheque_number',
-                    'value' => $transaction_cheque_number,
-                    'compare' => '='
-                ]
-            ],
-            'posts_per_page' => 1,
-            'fields' => 'ids',
-            'post__not_in' => [$payment_id]
-        ]);
-        if (!empty($existing)) {
-            wp_send_json_error(['message' => 'The transaction/cheque number already exists in the records.']);
-        }
-    }
    
     $tenant_name = get_the_title($tenant_id);   
     $post_title  = $tenant_name . ' - ' . date('M Y', strtotime($date));   
@@ -362,7 +327,7 @@ add_shortcode('ef_payments_stats', function() {
     $this_month_revenue = 0.00;   
     $month_query = new WP_Query([   
         'post_type'      => 'payment',   
-        'post_status'    => 'publish',   
+        'post_status'    => ['publish', 'future'],
         'posts_per_page' => -1,   
         'date_query'     => [   
             [   
@@ -438,7 +403,7 @@ $methods_list = ['Bank Transfer', 'Cash', 'Cheque', 'Card Payment'];
    
 $query = new WP_Query([     
     'post_type'      => 'payment',     
-    'post_status'    => 'publish',     
+    'post_status'    => ['publish', 'future'],
     'posts_per_page' => -1,     
     'meta_key'       => 'date_of_payment',     
     'orderby'        => 'meta_value',     

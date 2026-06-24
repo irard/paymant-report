@@ -146,7 +146,7 @@ add_shortcode('monthly_breakdown', function() {
  
         $args = array( 
             'post_type'      => $payment_post_type, 
-            'post_status'    => 'publish', 
+            'post_status'    => ['publish', 'future'],
             'posts_per_page' => -1, 
         ); 
  
